@@ -40,5 +40,5 @@ jobs:
         context: .
         push: true
         tags: |
-          tu-usuario/shipment-tracker-api:latest
-          tu-usuario/shipment-tracker-api:${{ github.sha }}
+          erickyamilrc/shipment-tracker-api:latest
+          erickyamilrc/shipment-tracker-api:${{ github.sha }}
