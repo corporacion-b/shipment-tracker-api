@@ -1,38 +1,63 @@
 import pytest
 from fastapi.testclient import TestClient
-from src.main import src
+from unittest.mock import AsyncMock, patch
+from src.main import src 
 
 client = TestClient(src)
-    
-## 1. Prueba del Endpoint Raíz
-def test_read_root():
+
+# MOCKS DE RESPUESTA
+MOCK_DHL_SUCCESS = {
+    "shipments": [
+        {
+            "status": {
+                "status": "DELIVERED",
+                "description": "Shipment has been delivered"
+            }
+        }
+    ]
+}
+
+MOCK_DHL_BAD_STRUCTURE = {"shipments": []}
+
+# PRUEBAS
+def test_root():
+    """Prueba que el root funcione y detecte la carga de la API KEY"""
     response = client.get("/")
     assert response.status_code == 200
-    assert response.json() == {"message": "API de Rastreo con DB simulada."}
+    assert "service" in response.json()
 
-## 2. Prueba de Rastreo Exitoso (Caso Existente)
-def test_get_status_success():
-    tracking_id = "DHL-123"
+@patch("src.main.buscar_en_dhl", new_callable=AsyncMock)
+def test_get_status_success(mock_buscar):
+    """Prueba el éxito (200) simulando una respuesta de DHL"""
+    mock_buscar.return_value = MOCK_DHL_SUCCESS
+    
+    tracking_id = "7777777770"
     response = client.get(f"/status/{tracking_id}")
     
     assert response.status_code == 200
     data = response.json()
     assert data["tracking_id"] == tracking_id
-    assert data["status"] == "In Transit"
-    assert "location" in data
+    assert data["status"] == "DELIVERED"
+    assert data["description"] == "Shipment has been delivered"
 
-## 3. Prueba de Error (ID no encontrado)
-def test_get_status_not_found():
-    tracking_id = "NON-EXISTENT-999"
-    response = client.get(f"/status/{tracking_id}")
+@patch("src.main.buscar_en_dhl", new_callable=AsyncMock)
+def test_get_status_not_found(mock_buscar):
+    """Prueba el error 404 cuando el paquete no existe"""
+    from fastapi import HTTPException
+    
+    mock_buscar.side_effect = HTTPException(status_code=404, detail="No existe en DHL")
+    
+    response = client.get("/status/0000000000")
     
     assert response.status_code == 404
-    assert response.json()["detail"] == "Envío no encontrado en el sistema"
+    assert response.json()["detail"] == "No existe en DHL"
 
-## 4. Prueba de Validación de Tipos (Opcional pero recomendada)
-def test_get_status_data_types():
-    response = client.get("/status/DHL-456")
-    data = response.json()
+@patch("src.main.buscar_en_dhl", new_callable=AsyncMock)
+def test_get_status_unprocessable_entity(mock_buscar):
+    """Prueba el error 422 cuando DHL responde algo inesperado"""
+    mock_buscar.return_value = MOCK_DHL_BAD_STRUCTURE
     
-    assert isinstance(data["days_stationary"], int)
-    assert isinstance(data["status"], str)
+    response = client.get("/status/12345")
+    
+    assert response.status_code == 422
+    assert "estructura de envío esperada" in response.json()["detail"]
