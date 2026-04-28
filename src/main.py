@@ -1,38 +1,13 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
+from src.api.routes import tracking
+from src.core.config import settings
 
-src = FastAPI(title="Shipment Tracker API")
+src = FastAPI(title=settings.PROJECT_NAME)
 
-db = {
-    "DHL-123": {
-        "status": "In Transit",
-        "location": "Mexico City",
-        "days_stationary": 0
-    },
-    "DHL-456": {
-        "status": "Held in Customs",
-        "location": "Madrid",
-        "days_stationary": 3
-    },
-    "DHL-789": {
-        "status": "Delivered",
-        "location": "New York",
-        "days_stationary": 0
-    }
-}
+# Rutas
+src.include_router(tracking.router)
 
-@src.get("/")
+@src.get("/", tags=["General"])
 async def root():
-    return {"message": "API de Rastreo con DB simulada."}
-
-@src.get("/status/{tracking_id}")
-async def get_status(tracking_id: str):
-    if tracking_id in db:
-        shipment_info = db[tracking_id]
-        return {
-            "tracking_id": tracking_id,
-            "status": shipment_info["status"],
-            "location": shipment_info["location"],
-            "days_stationary": shipment_info["days_stationary"]
-        }
-    
-    raise HTTPException(status_code=404, detail="Envío no encontrado en el sistema")
+    """Estado de la API."""
+    return {"service": settings.PROJECT_NAME, "status": "online"}

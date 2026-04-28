@@ -24,7 +24,6 @@ jobs:
 
     - name: Ejecutar Pruebas
       run: |
-        # Ejecuta específicamente tu archivo de pruebas
         pytest tests/test_main.py
 
     - name: Login en Docker Hub
