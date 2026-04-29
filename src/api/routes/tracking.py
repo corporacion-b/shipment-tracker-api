@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Path, HTTPException, status
+from fastapi import APIRouter, Path
 from src.services.dhl import DHLService
 from src.schemas.tracking import ShipmentStatus
+from src.services.tracking import TrackingService
 
 router = APIRouter()
 
@@ -47,17 +48,9 @@ async def get_status(
     tracking_id: str = Path(..., examples="7777777770", description="Número de guía DHL")
     ):
     """Obtiene únicamente el estado y descripción del paquete."""
-    data = await DHLService.buscar_en_dhl(tracking_id)
-    try:
-        shipment = data["shipments"][0]
-        status_data = shipment.get("status", {})
-        return {
-            "tracking_id": tracking_id,
-            "status": status_data.get("status", "N/A"),
-            "description": status_data.get("description", "Sin descripción")
-        }
-    except (KeyError, IndexError):
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="Estructura de DHL inválida."
-        )
+    normalized_status = await TrackingService().get_status(tracking_id)
+    return ShipmentStatus(
+        tracking_id=normalized_status.tracking_id,
+        status=normalized_status.status,
+        description=normalized_status.description,
+    )
