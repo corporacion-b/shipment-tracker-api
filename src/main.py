@@ -1,8 +1,18 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from src.api.routes import tracking
 from src.core.config import settings
+from src.db.connection import init_db
 
-src = FastAPI(title=settings.PROJECT_NAME)
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    init_db()
+    yield
+
+
+src = FastAPI(title=settings.PROJECT_NAME, lifespan=lifespan)
 
 # Rutas
 src.include_router(tracking.router)
