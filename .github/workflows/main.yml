@@ -3,6 +3,7 @@ name: CI/CD Shipment Tracker API
 on:
   push:
     branches: [ "main", "develop", "feature/*" ]
+    tags: [ "v*" ]  # <--- ESTO ES LO QUE FALTA
   pull_request:
     branches: [ "main", "develop" ]
 
