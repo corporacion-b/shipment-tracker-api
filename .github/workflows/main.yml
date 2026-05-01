@@ -43,3 +43,4 @@ jobs:
         tags: |
           erickyamilrc/shipment-tracker-api:latest
           erickyamilrc/shipment-tracker-api:${{ github.sha }}
+          ${{ startsWith(github.ref, 'refs/tags/') && format('erickyamilrc/shipment-tracker-api:{0}', github.ref_name) || '' }}
