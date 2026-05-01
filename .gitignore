@@ -3,3 +3,6 @@ node_modules/
 __pycache__/
 *.pyc
 .pytest_cache/
+.DS_Store
+shipment_tracker.db
+test_tracking.db
