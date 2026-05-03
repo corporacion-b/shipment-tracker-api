@@ -72,9 +72,12 @@ class Database:
                     CREATE TABLE IF NOT EXISTS shipments (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         tracking_id TEXT NOT NULL UNIQUE,
-                        carrier TEXT NOT NULL,
-                        current_status TEXT NOT NULL,
-                        current_description TEXT NOT NULL,
+                        carrier TEXT,             
+                        current_status TEXT,      
+                        current_description TEXT, 
+                        location TEXT,      
+                        city TEXT,           
+                        timestamp TEXT,
                         raw_payload TEXT NOT NULL,
                         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                         updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -101,14 +104,17 @@ class Database:
                 cursor.execute(
                     """
                     CREATE TABLE IF NOT EXISTS shipments (
-                        id BIGINT PRIMARY KEY AUTO_INCREMENT,
-                        tracking_id VARCHAR(255) NOT NULL UNIQUE,
-                        carrier VARCHAR(50) NOT NULL,
-                        current_status VARCHAR(100) NOT NULL,
-                        current_description TEXT NOT NULL,
-                        raw_payload JSON NOT NULL,
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        tracking_id TEXT NOT NULL UNIQUE,
+                        carrier TEXT,             
+                        current_status TEXT,       
+                        current_description TEXT, 
+                        location TEXT,           
+                        city TEXT,            
+                        timestamp TEXT,            
+                        raw_payload TEXT NOT NULL,
                         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                         last_synced_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
                     )
                     """

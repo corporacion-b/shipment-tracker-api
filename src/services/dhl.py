@@ -17,15 +17,22 @@ class DHLService:
         async with httpx.AsyncClient(timeout=10.0) as client:
             try:
                 response = await client.get(settings.DHL_BASE_URL, params=params, headers=headers)
+                response.raise_for_status()
+                data = response.json()
             except httpx.TimeoutException:
                 raise HTTPException(status_code=504, detail="La API de DHL tardó demasiado.")
+            except httpx.HTTPStatusError as e:
+                status_code = e.response.status_code
+                detail = f"Guía '{tracking_id}' no encontrada." if status_code == 404 else e.response.text
+                raise HTTPException(status_code=status_code, detail=detail)
             except Exception as e:
                 raise HTTPException(status_code=500, detail=f"Error de conexión: {str(e)}")
 
-        if response.status_code == 404:
-            raise HTTPException(status_code=404, detail=f"Guía '{tracking_id}' no existe.")
-        
-        if response.is_error:
-            raise HTTPException(status_code=response.status_code, detail=response.text)
+        shipments = data.get("shipments")
+        if not data or not shipments or len(shipments) == 0:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, 
+                detail=f"Guía '{tracking_id}' no encontrada en los registros de DHL."
+            )
 
-        return response.json()
+        return data
