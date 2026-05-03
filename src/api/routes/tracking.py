@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Path
 from src.services.dhl import DHLService
-from src.schemas.tracking import ShipmentStatus
+from src.schemas.tracking import ShipmentStatus, ShipmentLocation
 from src.services.tracking import TrackingService
 
 router = APIRouter()
@@ -53,4 +53,24 @@ async def get_status(
         tracking_id=normalized_status.tracking_id,
         status=normalized_status.status,
         description=normalized_status.description,
+    )
+
+@router.get(
+    "/location/{tracking_id}",
+    tags=["Tracking"],
+    summary="Obtener ubicación del paquete",
+    description="Obtiene la ubicación actual del paquete.",
+    responses={
+    },
+)
+async def get_location(
+    tracking_id: str = Path(..., examples="7777777770", description="Número de guía DHL")
+    ):
+    """Obtiene la ubicación actual del paquete."""
+    normalized_status = await TrackingService().get_location(tracking_id)
+    return ShipmentLocation (
+        tracking_id=normalized_status.tracking_id,
+        location=normalized_status.location,
+        city=normalized_status.city,
+        timestamp=normalized_status.timestamp,
     )

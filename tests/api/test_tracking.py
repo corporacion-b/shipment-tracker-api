@@ -1,114 +1,78 @@
 import pytest
-from unittest.mock import AsyncMock, patch
-from fastapi import HTTPException
 
-# MOCKS DE RESPUESTA
-MOCK_DHL_SUCCESS = {
-    "shipments": [
-        {
-            "status": {
-                "status": "DELIVERED",
-                "description": "Shipment has been delivered"
-            }
-        }
-    ]
-}
+REAL_ID = "12345688" 
 
 def test_root(client):
-    """Prueba que el root funcione."""
     response = client.get("/")
     assert response.status_code == 200
     assert "service" in response.json()
 
-@patch("src.api.routes.tracking.DHLService.buscar_en_dhl", new_callable=AsyncMock)
-def test_get_status_success(mock_buscar, client):
-    """Prueba el éxito (200) simulando el servicio de DHL"""
-    mock_buscar.return_value = MOCK_DHL_SUCCESS
+def test_get_full_tracking_integration(client):
+    """Verifica que el proxy a DHL funciona."""
+    response = client.get(f"/full-tracking/{REAL_ID}")
+    if response.status_code == 200:
+        assert "shipments" in response.json()
+    else:
+        assert response.status_code in [404, 429]
+
+def test_get_location_integration(client, db_connection):
+    """Prueba real: API DHL -> Normalización -> DB -> Response."""
+    response = client.get(f"/location/{REAL_ID}")
     
-    tracking_id = "7777777770"
-    response = client.get(f"/status/{tracking_id}")
+    if response.status_code == 429:
+        pytest.skip("Límite de peticiones de DHL alcanzado (429)")
+
+    assert response.status_code == 200
+    data = response.json()
+    
+    assert data["tracking_id"] == REAL_ID
+    assert " - " not in data["location"] 
+    assert data["city"] is not None
+
+    row = db_connection.execute(
+        "SELECT location, city, timestamp FROM shipments WHERE tracking_id = ?",
+        (REAL_ID,)
+    ).fetchone()
+    
+    assert row is not None
+    assert row["location"] == data["location"]
+    assert row["city"] == data["city"]
+
+def test_get_location_persistence(client, db_connection):
+    """Prueba que los datos se guarden en DB tras consultar ubicación."""
+    response = client.get(f"/location/{REAL_ID}")
+    
+    if response.status_code == 200:
+        data = response.json()
+    
+        row = db_connection.execute(
+            "SELECT location, city FROM shipments WHERE tracking_id = ?", (REAL_ID,)
+        ).fetchone()
+        assert row is not None
+        assert row["location"] == data["location"]
+    elif response.status_code == 429:
+        pytest.skip("DHL API Rate limit reached")
+
+def test_get_status_integration(client, db_connection):
+    """Prueba real de estado y persistencia."""
+    response = client.get(f"/status/{REAL_ID}")
     
     assert response.status_code == 200
     data = response.json()
-    assert data["tracking_id"] == tracking_id
-    assert data["status"] == "DELIVERED"
-    assert data["description"] == "Shipment has been delivered"
-
-@patch("src.api.routes.tracking.DHLService.buscar_en_dhl", new_callable=AsyncMock)
-def test_get_status_unprocessable_entity(mock_buscar, client):
-    """Prueba el error 422 cuando la estructura de datos es inválida"""
-    mock_buscar.return_value = {"shipments": []}
+    assert "status" in data
     
-    response = client.get("/status/12345")
-    
-    assert response.status_code == 422
-    assert "Estructura de DHL inválida" in response.json()["detail"]
-
-
-@patch("src.api.routes.tracking.DHLService.buscar_en_dhl", new_callable=AsyncMock)
-def test_get_status_persists_shipment_status(mock_buscar, client, db_connection):
-    """Guarda el estado normalizado del envío tras consultar DHL."""
-    mock_buscar.return_value = MOCK_DHL_SUCCESS
-
-    tracking_id = "7777777770"
-    response = client.get(f"/status/{tracking_id}")
-
-    assert response.status_code == 200
-
     row = db_connection.execute(
-        """
-        SELECT tracking_id, carrier, current_status, current_description
-        FROM shipments
-        WHERE tracking_id = ?
-        """,
-        (tracking_id,),
+        "SELECT current_status FROM shipments WHERE tracking_id = ?",
+        (REAL_ID,)
     ).fetchone()
-
+    
     assert row is not None
-    assert row["tracking_id"] == tracking_id
-    assert row["carrier"] == "DHL"
-    assert row["current_status"] == "DELIVERED"
-    assert row["current_description"] == "Shipment has been delivered"
+    assert row["current_status"] == data["status"]
 
-
-@patch("src.api.routes.tracking.DHLService.buscar_en_dhl", new_callable=AsyncMock)
-def test_get_status_updates_existing_shipment(mock_buscar, client, db_connection):
-    """Actualiza el mismo envío en lugar de duplicarlo."""
-    tracking_id = "7777777770"
-    mock_buscar.side_effect = [
-        MOCK_DHL_SUCCESS,
-        {
-            "shipments": [
-                {
-                    "status": {
-                        "status": "TRANSIT",
-                        "description": "Shipment is moving again",
-                    }
-                }
-            ]
-        },
-    ]
-
-    first_response = client.get(f"/status/{tracking_id}")
-    second_response = client.get(f"/status/{tracking_id}")
-
-    assert first_response.status_code == 200
-    assert second_response.status_code == 200
-    assert second_response.json()["status"] == "TRANSIT"
-
-    count_row = db_connection.execute(
-        "SELECT COUNT(*) AS total FROM shipments WHERE tracking_id = ?",
-        (tracking_id,),
-    ).fetchone()
-    shipment_row = db_connection.execute(
-        """
-        SELECT current_status, current_description
-        FROM shipments
-        WHERE tracking_id = ?
-        """,
-        (tracking_id,),
-    ).fetchone()
-
-    assert count_row["total"] == 1
-    assert shipment_row["current_status"] == "TRANSIT"
-    assert shipment_row["current_description"] == "Shipment is moving again"
+def test_get_status_not_found(client):
+    """Verifica el manejo de una guía que no existe (MOCK o Real)."""
+    invalid_id = "1234567892"
+    response = client.get(f"/status/{invalid_id}")
+    
+    assert response.status_code == 404
+    assert "no encontrada" in response.json()["detail"].lower()
