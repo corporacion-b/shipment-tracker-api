@@ -24,18 +24,31 @@ class TrackingService:
         return normalized_status
 
     @staticmethod
-    def _normalize_status(
-        tracking_id: str,
-        data: dict,
-    ) -> NormalizedShipmentStatus:
+    def _extract_status_data(data: dict) -> dict:
         try:
             shipment = data["shipments"][0]
-            status_data = shipment.get("status", {})
         except (KeyError, IndexError):
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="Estructura de DHL inválida.",
             )
+
+        status_data = shipment.get("status")
+        if not isinstance(status_data, dict) or not status_data:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="Estructura de DHL inválida.",
+            )
+
+        return status_data
+
+    @classmethod
+    def _normalize_status(
+        cls,
+        tracking_id: str,
+        data: dict,
+    ) -> NormalizedShipmentStatus:
+        status_data = cls._extract_status_data(data)
 
         return NormalizedShipmentStatus(
             tracking_id=tracking_id,
@@ -54,38 +67,28 @@ class TrackingService:
         )
         return normalized_location
     
-    @staticmethod
+    @classmethod
     def _normalize_location(
+        cls,
         tracking_id: str,
         data: dict,
     ) -> NormalizedShipmentLocation:
-        try:
-            shipment = data["shipments"][0]
-            status_data = shipment.get("status", {})
-            location_dict = status_data.get("location", {})
-            address_dict = location_dict.get("address", {})
-            country = address_dict.get("countryCode", "")
-            
-            raw_locality = address_dict.get("addressLocality", "")
-            if " - " in raw_locality:
-                country_name = raw_locality.split(" - ")[1].strip()
-            else:
-                country_name = country
-            
-            location_only_country = country_name if country_name else "País desconocido"
-            city_clean = raw_locality.split(" - ")[0].strip() if " - " in raw_locality else raw_locality
-            city_final = city_clean if city_clean else "Ciudad desconocida"
-            timestamp = status_data.get("timestamp", "Fecha desconocida")
-            
-        except (KeyError, IndexError):
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail="Estructura de DHL inválida.",
-            )
+        status_data = cls._extract_status_data(data)
+        location_dict = status_data.get("location") or {}
+        address_dict = location_dict.get("address") or {}
+        raw_locality = address_dict.get("addressLocality", "")
+
+        if " - " in raw_locality:
+            city, country = raw_locality.split(" - ", 1)
+            city_value = city.strip()
+            location_value = country.strip()
+        else:
+            city_value = raw_locality.strip()
+            location_value = address_dict.get("countryCode", "").strip()
 
         return NormalizedShipmentLocation(
             tracking_id=tracking_id,
-            location=location_only_country,
-            city=city_final,
-            timestamp=timestamp,
+            location=location_value or "País desconocido",
+            city=city_value or "Ciudad desconocida",
+            timestamp=status_data.get("timestamp", "Fecha desconocida"),
         )

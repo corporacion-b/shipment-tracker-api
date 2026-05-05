@@ -59,18 +59,35 @@ async def get_status(
     "/location/{tracking_id}",
     tags=["Tracking"],
     summary="Obtener ubicación del paquete",
-    description="Obtiene la ubicación actual del paquete.",
+    description="Filtra la respuesta de DHL para entregar la ubicación actual del paquete.",
     responses={
+        200: {
+            "description": "Operación exitosa",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "tracking_id": "12345678",
+                        "location": "Spain",
+                        "city": "Madrid",
+                        "timestamp": "2024-04-16T09:30:00Z"
+                    }
+                }
+            },
+        },
+        404: {"description": "El número de rastreo no existe en los registros"},
+        422: {"description": "La estructura del JSON de DHL cambió o es inválida"},
+        500: {"description": "Error de configuración o conexión inesperada"},
+        504: {"description": "DHL no respondió a tiempo"}
     },
 )
 async def get_location(
     tracking_id: str = Path(..., examples="7777777770", description="Número de guía DHL")
     ):
     """Obtiene la ubicación actual del paquete."""
-    normalized_status = await TrackingService().get_location(tracking_id)
+    normalized_location = await TrackingService().get_location(tracking_id)
     return ShipmentLocation (
-        tracking_id=normalized_status.tracking_id,
-        location=normalized_status.location,
-        city=normalized_status.city,
-        timestamp=normalized_status.timestamp,
+        tracking_id=normalized_location.tracking_id,
+        location=normalized_location.location,
+        city=normalized_location.city,
+        timestamp=normalized_location.timestamp,
     )

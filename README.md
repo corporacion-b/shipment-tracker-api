@@ -1,75 +1,80 @@
-# DHL Shipment Tracker API
+# DHL-Shipment-Tracker-API
 
 <p align="center">
-  API de rastreo de envíos construida con FastAPI que consume DHL y persiste el estado actual en MySQL.
+  API de rastreo de envíos construida con FastAPI que consume la DHL API.
 </p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python">
   <img src="https://img.shields.io/badge/FastAPI-API-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI">
-  <img src="https://img.shields.io/badge/MySQL-8.0-4479A1?style=for-the-badge&logo=mysql&logoColor=white" alt="MySQL">
+  <img src="https://img.shields.io/badge/Pytest-Tests-0A9EDC?style=for-the-badge&logo=pytest&logoColor=white" alt="Pytest">
   <img src="https://img.shields.io/badge/Docker-Containerized-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker">
 </p>
 
 ---
 
-## Propósito
 
-`shipment-tracker-api` centraliza la consulta de un envío en un endpoint HTTP simple. Por ahora el flujo implementado es:
+## Problema
 
-1. recibe un `tracking_id`
-2. consulta la API de DHL
-3. normaliza la respuesta
-4. guarda o actualiza el estado actual en MySQL
-5. devuelve una respuesta JSON estable al cliente
+Consultar el estado de un envío desde distintas fuentes suele implicar respuestas poco uniformes o resultados imprecisos.
 
-La persistencia se pensó para poder crecer luego hacia historial, ubicación, `dwell-time` y análisis de riesgo sin reescribir el flujo principal.
+## Solucion
+
+`shipment-tracker-api` centraliza la consulta del envío en un endpoint HTTP simple y devuelve una respuesta estructurada con el identificador, el estado actual, la ubicación y los días en espera.
+
+## Enfoque tecnico
+
+El servicio fue desarrollado con FastAPI y se valida con un enfoque "shift left" mediante pruebas automatizadas con `pytest` y `TestClient`. Además, el proyecto cuenta con un pipeline CI/CD que construye y publica la imagen Docker en Docker Hub para facilitar su ejecución y despliegue.
 
 ---
 
-## Estado actual
+## Caracteristicas
 
-El endpoint funcional hoy es:
+- Respuestas JSON consistentes y fáciles de consumir.
+- Manejo de errores para consultas inválidas o envíos no encontrados.
+- Pruebas automatizadas del flujo principal.
+- Contenerización con Docker.
 
-| Método | Endpoint | Descripción |
-| --- | --- | --- |
-| GET | `/status/{tracking_id}` | Consulta DHL, persiste el estado actual y devuelve `tracking_id`, `status` y `description`. |
+---
 
-Ejemplo de respuesta:
+## Arquitectura del servicio
 
-```json
-{
-  "tracking_id": "7777777770",
-  "status": "TRANSIT",
-  "description": "The shipment is in transit"
-}
-```
+<p align="center">
+  <img src="./docs/arquitectura.png" alt="Diagrama de arquitectura del servicio" width="900">
+</p>
 
-Errores esperados:
+La arquitectura se organiza alrededor de `shipment-tracker-api` como servicio central de consulta. Un cliente, ya sea desde Postman o desde un frontend, envía solicitudes al servicio para obtener información de rastreo. A partir de estas solicitudes, la API consume la DHL API para recuperar datos del envío, como estatus, ubicación, historial y tiempo inmóvil.
 
-| Código | Descripción |
+`shipment-tracker-api` consulta la DHL API, guarda datos en MySQL y los envía a `shipment-risk-analyzer` para el análisis de riesgo.
+
+---
+
+## Stack tecnológico del proyecto
+
+| Categoría | Herramientas |
 | --- | --- |
-| `404` | DHL no encontró la guía consultada. |
-| `422` | La estructura del JSON devuelto por DHL no tiene el formato esperado. |
-| `500` | Error de configuración o conexión no controlado. |
-| `504` | Timeout al consultar DHL. |
+| Backend | Python, FastAPI |
+| Testing | PyTest |
+| Base de datos | MySQL, Alembic |
+| Control de versiones | Git, GitHub |
+| CI/CD | GitHub Actions, GitHub Secrets |
+| Contenedores | Docker, Docker Compose, Docker Hub |
+| Documentación y pruebas | Swagger, Postman |
+| Desarrollo | VSCode |
+| Gestión del proyecto | Trello, Discord |
+| Herramientas de apoyo | Excalidraw, Google Docs, herramientas de IA |
 
 ---
 
-## Arquitectura implementada
+## Pipeline CI/CD
 
-La implementación actual para `/status/{tracking_id}` se separa en capas para poder añadir más endpoints sin duplicar lógica:
+<p align="center">
+  <img src="./docs/pipeline.png" alt="Diagrama del pipeline CI/CD" width="900">
+</p>
 
-- `src/api/routes/tracking.py`: capa HTTP
-- `src/services/tracking.py`: orquesta el caso de uso
-- `src/services/dhl.py`: cliente hacia DHL
-- `src/repositories/shipment_repository.py`: persistencia del estado actual
-- `src/db/connection.py`: conexión e inicialización de esquema
+El flujo de trabajo parte de `main`, desde donde se crean ramas `feature` para nuevas funcionalidades y ramas `fix` para correcciones. Una vez desarrollado el cambio, este se integra mediante un pull request hacia `develop`, donde pasa por una etapa de revisión en parejas, validación de comportamiento y pruebas unitarias.
 
-Tablas creadas automáticamente al arrancar:
-
-- `shipments`: estado actual persistido por `tracking_id`
-- `tracking_events`: preparada para futuros endpoints de historial y eventos
+Si la revisión o las pruebas fallan, el flujo regresa a una rama de corrección para ajustar el cambio antes de volver a evaluarlo. Cuando el cambio es aprobado, entra a la fase de despliegue e integración, donde GitHub Actions ejecuta el workflow, levanta un entorno de prueba similar a producción, corre pruebas automatizadas, construye la imagen Docker y la publica. Finalmente, tras completar el proceso, los cambios se integran en `main`.
 
 ---
 
@@ -78,19 +83,18 @@ Tablas creadas automáticamente al arrancar:
 ```text
 shipment-tracker-api/
 ├── .github/
-├── docs/
+│   └── workflows/
+│       └── ci.yml
 ├── src/
-│   ├── api/
-│   ├── core/
-│   ├── db/
-│   ├── repositories/
-│   ├── schemas/
-│   └── services/
+│   └── # Código fuente de la API
 ├── tests/
+│   └── # Pruebas automatizadas
 ├── Dockerfile
 ├── docker-compose.yml
 ├── .env.example
+├── .gitignore
 ├── requirements.txt
+├── LICENSE
 └── README.md
 ```
 
@@ -100,38 +104,34 @@ shipment-tracker-api/
 
 - Python 3.10 o superior
 - `pip`
-- Docker Desktop o Docker Engine con Compose
-- credenciales válidas de DHL
+- Git
+- Docker
+- Docker Compose
+- Credenciales de acceso a la DHL API
+- Variables de entorno configuradas
+
+Antes de ejecutar el proyecto, asegúrate de contar con acceso a la DHL API, definir las variables necesarias y tener disponible un entorno local o en contenedor para la base de datos y la aplicación.
 
 ---
 
 ## Variables de entorno
 
-Copia `.env.example` a `.env` y ajusta las credenciales:
+El proyecto usa variables de entorno para configurar la aplicación, la base de datos y la integración con la DHL API. En local, estas variables se definen en un archivo `.env`.
 
-```bash
-cp .env.example .env
-```
+Para CI/CD, los datos sensibles no se guardan en el repositorio. En su lugar, se almacenan en `GitHub Secrets` para que el pipeline pueda usarlos de forma segura.
 
-Contenido esperado:
+### Ejemplo de archivo `.env`
 
 ```env
 PROJECT_NAME=Shipment Tracker API
 DHL_API_KEY=your_dhl_api_key
 DHL_API_SECRET=your_dhl_api_secret
 DHL_BASE_URL=https://api-eu.dhl.com/track/shipments
-DATABASE_URL=mysql://root:secret@localhost:3306/shipments
+DATABASE_URL=mysql://root:secret@127.0.0.1:3307/shipments
 ```
-
-Notas:
-
-- `DATABASE_URL` usa MySQL local corriendo en Docker y expuesto por el puerto `3306`.
-- Si la API corre fuera de Docker y MySQL dentro de Docker, `localhost` es correcto.
-- `DHL_API_SECRET` hoy se sigue leyendo desde configuración aunque la llamada actual a DHL usa solo `DHL_API_KEY`.
-
 ---
 
-## Arranque local con MySQL en Docker
+## Desarrollo local
 
 ### 1. Levantar MySQL
 
@@ -144,17 +144,11 @@ docker compose up -d mysql
 Esto crea un contenedor MySQL 8 con:
 
 - host: `localhost`
-- puerto: `3306`
+- puerto: `3307`
 - usuario: `root`
 - contraseña: `secret`
 - base de datos: `shipments`
 
-Para confirmar que está saludable:
-
-```bash
-docker compose ps
-docker compose logs mysql
-```
 
 ### 2. Instalar dependencias de Python
 
@@ -168,11 +162,11 @@ pip install -r requirements.txt
 uvicorn src.main:src --reload
 ```
 
-Al arrancar:
+Para ejecución local, `DATABASE_URL` debe apuntar a MySQL expuesto en tu máquina:
 
-- la aplicación lee `.env`
-- se conecta a MySQL usando `DATABASE_URL`
-- crea las tablas mínimas si no existen
+```env
+DATABASE_URL=mysql://root:secret@127.0.0.1:3307/shipments
+```
 
 La API queda disponible en:
 
@@ -180,99 +174,108 @@ La API queda disponible en:
 http://127.0.0.1:8000
 ```
 
-### 4. Probar el endpoint
+---
+
+## Ejecución con imagen Docker
+
+### 1. Descargar la imagen
 
 ```bash
-curl http://127.0.0.1:8000/status/TU_TRACKING_REAL
+docker pull erickyamilrc/shipment-tracker-api:latest
 ```
 
-Si DHL reconoce la guía:
+### 2. Ejecutar la API con MySQL en Docker Compose
 
-- FastAPI devuelve `tracking_id`, `status` y `description`
-- MySQL guarda o actualiza el registro en `shipments`
+```bash
+docker compose up -d
+```
 
-Si DHL no reconoce la guía verás algo como:
+La aplicación no debe conectarse a `localhost`, sino al servicio `mysql` usando el puerto interno de MySQL:
+
+```env
+DATABASE_URL=mysql://root:secret@mysql:3306/shipments
+```
+
+Al arrancar:
+
+- Docker Compose levanta los servicios `api` y `mysql`
+- La API usa la imagen publicada del proyecto
+- La aplicación se conecta a MySQL mediante la red interna de Docker
+
+La API queda disponible en:
+
+```text
+http://127.0.0.1:8000
+```
+
+
+---
+
+## Endpoints disponibles
+
+| Método | Endpoint | Descripción |
+| --- | --- | --- |
+| GET | `/status/{tracking_id}` | Obtiene el estado actual del paquete. |
+| GET | `/location/{tracking_id}` | Devuelve la ubicación actual del envío. |
+| GET | `/shipment/{id}/history` | Lista cronológicamente los puntos de control del paquete. |
+| GET | `/shipment/{id}/dwell-time` | Calcula el tiempo que el paquete ha permanecido inmóvil en la ubicación actual. |
+
+### Ejemplo de respuesta JSON: `/status/{tracking_id}`
 
 ```json
-{"detail":"Guía 'TU_TRACKING_REAL' no existe."}
+{
+  "tracking_id": "DHL-123",
+  "status": "En transito"
+}
 ```
 
-En ese caso no habrá persistencia porque la consulta externa falló antes del guardado.
+### Ejemplo de respuesta JSON: `/location/{tracking_id}`
+
+```json
+{
+  "tracking_id": "DHL-123",
+  "location": "Madrid"
+}
+```
+
+### Ejemplo de respuesta JSON: `/shipment/{id}/history`
+
+```json
+{
+  "tracking_id": "DHL-123",
+  "history": [
+    "Ciudad de origen",
+    "Centro logístico",
+    "Aduana",
+    "Ciudad de destino"
+  ]
+}
+```
+
+### Ejemplo de respuesta JSON: `/shipment/{id}/dwell-time`
+
+```json
+{
+  "tracking_id": "DHL-123",
+  "days_stationary": 2
+}
+```
+
+### Manejo de errores
+
+| Código | Descripción |
+| --- | --- |
+| `400 Bad Request` | El formato del `id` es inválido o faltan parámetros obligatorios. |
+| `401/403 Unauthorized` | Fallo en la autenticación o falta de permisos para consultar el envío. |
+| `404 Not Found` | El número de guía no existe en los registros de DHL. |
+| `429 Too Many Requests` | El cliente ha excedido el límite de peticiones permitido. |
+| `500 Internal Server Error` | Error genérico no controlado en el servidor. |
+| `502 Bad Gateway` | La API de DHL devolvió una respuesta inválida o inesperada. |
+| `503 Service Unavailable` | La API de DHL no responde o se encuentra en mantenimiento. |
 
 ---
 
-## Verificación de persistencia
-
-### Opción 1: desde DBeaver
-
-Conéctate a MySQL con estos datos:
-
-- host: `localhost`
-- port: `3306`
-- database: `shipments`
-- user: `root`
-- password: `secret`
-
-Consulta útil:
-
-```sql
-SELECT id, tracking_id, carrier, current_status, current_description, last_synced_at
-FROM shipments
-ORDER BY id DESC;
-```
-
-### Opción 2: desde el cliente MySQL dentro del contenedor
-
-```bash
-docker exec -it shipment-mysql mysql -uroot -psecret shipments
-```
-
-Luego:
-
-```sql
-SHOW TABLES;
-
-SELECT id, tracking_id, carrier, current_status, current_description, last_synced_at
-FROM shipments;
-```
-
----
-
-## Pruebas automatizadas
-
-Ejecuta la suite con:
-
-```bash
-pytest -q
-```
-
-Las pruebas validan que `/status/{tracking_id}`:
-
-- responde correctamente
-- persiste el envío consultado
-- actualiza el mismo envío sin duplicarlo
-
-Importante:
-
-- los tests usan una base SQLite aislada para no depender de MySQL local
-- el entorno de desarrollo del equipo queda estandarizado con MySQL en Docker
-
----
-
-## Docker Compose
-
-El proyecto incluye [docker-compose.yml](/Users/enriquevido/Documents/UV/6to/Despliegue%20de%20software/proyecto/shipment-tracker-api/docker-compose.yml) para estandarizar la base de datos local.
-
-Hoy el `compose` solo levanta MySQL. La API sigue ejecutándose desde `uvicorn` en la máquina local, lo cual simplifica depuración y desarrollo. Más adelante se puede añadir un servicio `api` al mismo `compose` sin cambiar el flujo de persistencia ya implementado.
-
----
-
-## Notas para el equipo
-
-- No editen tablas a mano como mecanismo principal de cambios de esquema.
-- Mientras no exista Alembic, el esquema actual se crea automáticamente al arrancar.
-- Si alguien cambia la estructura de tablas, debe coordinarlo con el equipo y reflejarlo en código y documentación.
-- El siguiente paso natural para madurar esta base es introducir migraciones con Alembic.
+## Documentación automática
 
 - Swagger UI: `http://127.0.0.1:8000/docs`
 - Esta interfaz permite explorar los endpoints, probar solicitudes y revisar los modelos de respuesta desde el navegador.
