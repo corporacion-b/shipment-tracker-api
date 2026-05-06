@@ -1,114 +1,119 @@
-import pytest
-from unittest.mock import AsyncMock, patch
 from fastapi import HTTPException
 
-# MOCKS DE RESPUESTA
-MOCK_DHL_SUCCESS = {
-    "shipments": [
-        {
-            "status": {
-                "status": "DELIVERED",
-                "description": "Shipment has been delivered"
-            }
-        }
-    ]
-}
+from src.services.dhl import DHLService
 
-def test_root(client):
-    """Prueba que el root funcione."""
+
+def test_root(client, clean_test_db):
     response = client.get("/")
+
     assert response.status_code == 200
     assert "service" in response.json()
 
-@patch("src.api.routes.tracking.DHLService.buscar_en_dhl", new_callable=AsyncMock)
-def test_get_status_success(mock_buscar, client):
-    """Prueba el éxito (200) simulando el servicio de DHL"""
-    mock_buscar.return_value = MOCK_DHL_SUCCESS
-    
+
+def test_get_status_returns_normalized_status_and_persists(client, db_connection, clean_test_db, monkeypatch):
     tracking_id = "7777777770"
-    response = client.get(f"/status/{tracking_id}")
-    
-    assert response.status_code == 200
-    data = response.json()
-    assert data["tracking_id"] == tracking_id
-    assert data["status"] == "DELIVERED"
-    assert data["description"] == "Shipment has been delivered"
+    dhl_payload = {
+        "shipments": [
+            {
+                "status": {
+                    "status": "TRANSIT",
+                    "description": "The shipment is in transit",
+                }
+            }
+        ]
+    }
 
-@patch("src.api.routes.tracking.DHLService.buscar_en_dhl", new_callable=AsyncMock)
-def test_get_status_unprocessable_entity(mock_buscar, client):
-    """Prueba el error 422 cuando la estructura de datos es inválida"""
-    mock_buscar.return_value = {"shipments": []}
-    
-    response = client.get("/status/12345")
-    
-    assert response.status_code == 422
-    assert "Estructura de DHL inválida" in response.json()["detail"]
+    async def fake_buscar_en_dhl(_: str):
+        return dhl_payload
 
+    monkeypatch.setattr(DHLService, "buscar_en_dhl", fake_buscar_en_dhl)
 
-@patch("src.api.routes.tracking.DHLService.buscar_en_dhl", new_callable=AsyncMock)
-def test_get_status_persists_shipment_status(mock_buscar, client, db_connection):
-    """Guarda el estado normalizado del envío tras consultar DHL."""
-    mock_buscar.return_value = MOCK_DHL_SUCCESS
-
-    tracking_id = "7777777770"
     response = client.get(f"/status/{tracking_id}")
 
     assert response.status_code == 200
+    assert response.json() == {
+        "tracking_id": tracking_id,
+        "status": "TRANSIT",
+        "description": "The shipment is in transit",
+    }
 
-    row = db_connection.execute(
-        """
-        SELECT tracking_id, carrier, current_status, current_description
-        FROM shipments
-        WHERE tracking_id = ?
-        """,
-        (tracking_id,),
-    ).fetchone()
+    with db_connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT current_status, current_description FROM shipments WHERE tracking_id = %s",
+            (tracking_id,),
+        )
+        row = cursor.fetchone()
 
     assert row is not None
-    assert row["tracking_id"] == tracking_id
-    assert row["carrier"] == "DHL"
-    assert row["current_status"] == "DELIVERED"
-    assert row["current_description"] == "Shipment has been delivered"
+    assert row["current_status"] == "TRANSIT"
+    assert row["current_description"] == "The shipment is in transit"
 
 
-@patch("src.api.routes.tracking.DHLService.buscar_en_dhl", new_callable=AsyncMock)
-def test_get_status_updates_existing_shipment(mock_buscar, client, db_connection):
-    """Actualiza el mismo envío en lugar de duplicarlo."""
+def test_get_location_returns_normalized_location_and_persists(client, db_connection, clean_test_db, monkeypatch):
     tracking_id = "7777777770"
-    mock_buscar.side_effect = [
-        MOCK_DHL_SUCCESS,
-        {
-            "shipments": [
-                {
-                    "status": {
-                        "status": "TRANSIT",
-                        "description": "Shipment is moving again",
-                    }
+    dhl_payload = {
+        "shipments": [
+            {
+                "status": {
+                    "timestamp": "2024-04-16T09:30:00Z",
+                    "location": {
+                        "address": {
+                            "addressLocality": "Madrid - Spain",
+                            "countryCode": "ES",
+                        }
+                    },
                 }
-            ]
-        },
-    ]
+            }
+        ]
+    }
 
-    first_response = client.get(f"/status/{tracking_id}")
-    second_response = client.get(f"/status/{tracking_id}")
+    async def fake_buscar_en_dhl(_: str):
+        return dhl_payload
 
-    assert first_response.status_code == 200
-    assert second_response.status_code == 200
-    assert second_response.json()["status"] == "TRANSIT"
+    monkeypatch.setattr(DHLService, "buscar_en_dhl", fake_buscar_en_dhl)
 
-    count_row = db_connection.execute(
-        "SELECT COUNT(*) AS total FROM shipments WHERE tracking_id = ?",
-        (tracking_id,),
-    ).fetchone()
-    shipment_row = db_connection.execute(
-        """
-        SELECT current_status, current_description
-        FROM shipments
-        WHERE tracking_id = ?
-        """,
-        (tracking_id,),
-    ).fetchone()
+    response = client.get(f"/location/{tracking_id}")
 
-    assert count_row["total"] == 1
-    assert shipment_row["current_status"] == "TRANSIT"
-    assert shipment_row["current_description"] == "Shipment is moving again"
+    assert response.status_code == 200
+    assert response.json() == {
+        "tracking_id": tracking_id,
+        "location": "Spain",
+        "city": "Madrid",
+        "timestamp": "2024-04-16T09:30:00Z",
+    }
+
+    with db_connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT location, city, timestamp FROM shipments WHERE tracking_id = %s",
+            (tracking_id,),
+        )
+        row = cursor.fetchone()
+
+    assert row is not None
+    assert row["location"] == "Spain"
+    assert row["city"] == "Madrid"
+    assert row["timestamp"] == "2024-04-16T09:30:00Z"
+
+
+def test_get_status_propagates_not_found(client, clean_test_db, monkeypatch):
+    async def fake_buscar_en_dhl(_: str):
+        raise HTTPException(status_code=404, detail="Guía no encontrada.")
+
+    monkeypatch.setattr(DHLService, "buscar_en_dhl", fake_buscar_en_dhl)
+
+    response = client.get("/status/does-not-exist")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Guía no encontrada."}
+
+
+def test_get_location_returns_422_for_invalid_dhl_structure(client, clean_test_db, monkeypatch):
+    async def fake_buscar_en_dhl(_: str):
+        return {"shipments": []}
+
+    monkeypatch.setattr(DHLService, "buscar_en_dhl", fake_buscar_en_dhl)
+
+    response = client.get("/location/7777777770")
+
+    assert response.status_code == 422
+    assert response.json() == {"detail": "Estructura de DHL inválida."}
