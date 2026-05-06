@@ -5,3 +5,4 @@ httpx
 python-dotenv
 pydantic_settings
 pymysql
+cryptography

@@ -1,43 +1,53 @@
 import os
-import sqlite3
-from pathlib import Path
-
+import pymysql
 import pytest
+from dotenv import load_dotenv
 from fastapi.testclient import TestClient
+from urllib.parse import urlparse
 
-TEST_DB_PATH = Path("test_tracking.db")
+load_dotenv()
 
 os.environ.setdefault("DHL_API_KEY", "dummy-key")
-os.environ.setdefault("DHL_API_SECRET", "dummy-secret")
-os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DB_PATH}"
+os.environ.setdefault("DATABASE_URL", "mysql://root:secret@127.0.0.1:3307/shipments")
 
+from src.db.connection import init_db
 from src.main import src
 
+def get_db_params():
+    url = urlparse(os.environ["DATABASE_URL"])
+    return {
+        "host": url.hostname,
+        "port": url.port,
+        "user": url.username,
+        "password": url.password,
+        "database": url.path.lstrip("/"),
+        "cursorclass": pymysql.cursors.DictCursor,
+        "autocommit": True,
+    }
 
-@pytest.fixture(autouse=True)
+@pytest.fixture
 def clean_test_db():
-    """Reinicia la base de datos SQLite entre pruebas."""
-    if TEST_DB_PATH.exists():
-        TEST_DB_PATH.unlink()
-
-    yield
-
-    if TEST_DB_PATH.exists():
-        TEST_DB_PATH.unlink()
+    init_db()
+    connection = pymysql.connect(**get_db_params())
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("DELETE FROM tracking_events")
+            cursor.execute("DELETE FROM shipments")
+        yield
+    finally:
+        connection.close()
 
 
 @pytest.fixture
 def client():
-    """Fixture que provee un cliente de pruebas para la app."""
     with TestClient(src) as test_client:
         yield test_client
 
 
 @pytest.fixture
 def db_connection():
-    """Conexión SQLite para validar persistencia desde las pruebas."""
-    connection = sqlite3.connect(TEST_DB_PATH)
-    connection.row_factory = sqlite3.Row
+    init_db()
+    connection = pymysql.connect(**get_db_params())
     try:
         yield connection
     finally:
