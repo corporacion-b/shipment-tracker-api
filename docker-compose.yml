@@ -11,11 +11,30 @@ services:
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-psecret"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-psecret"]
       interval: 10s
       timeout: 5s
-      retries: 10
-      start_period: 20s
+      retries: 5
+      start_period: 30s
+    networks:          # 👈 agregado
+      - shipment-network
+
+  api:
+    build: .
+    container_name: shipment-api
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=mysql://root:secret@mysql:3306/shipments
+    ports:
+      - "8000:8000"
+    networks:          # 👈 agregado
+      - shipment-network
 
 volumes:
   mysql_data:
+
+networks:              # 👈 agregado al final
+  shipment-network:
+    driver: bridge
