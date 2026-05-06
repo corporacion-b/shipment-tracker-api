@@ -16,7 +16,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    networks:          # 👈 agregado
+    networks:    
       - shipment-network
 
   api:
@@ -29,7 +29,7 @@ services:
       - DATABASE_URL=mysql://root:secret@mysql:3306/shipments
     ports:
       - "8000:8000"
-    networks:          # 👈 agregado
+    networks:         
       - shipment-network
 
 volumes:
