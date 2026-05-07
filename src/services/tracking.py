@@ -4,6 +4,7 @@ from fastapi import HTTPException, status
 from src.repositories.shipment_repository import (
     NormalizedShipmentStatus,
     NormalizedShipmentLocation,
+    NormalizedShipmentHistory,
     ShipmentRepository,
 )
 from src.services.dhl import DHLService
@@ -92,3 +93,36 @@ class TrackingService:
             city=city_value or "Ciudad desconocida",
             timestamp=status_data.get("timestamp", "Fecha desconocida"),
         )
+    
+    async def get_history(self, tracking_id: str) -> NormalizedShipmentHistory:
+        data = await DHLService.buscar_en_dhl(tracking_id)
+        normalized_history = self._normalize_history(tracking_id, data)
+        
+        # Guardamos en hilo separado para no bloquear la respuesta
+        await to_thread.run_sync(
+            self.repository.upsert_history,
+            normalized_history,
+            data,
+        )
+        return normalized_history
+    
+    @classmethod
+    def _normalize_history(cls, tracking_id: str, data: dict) -> NormalizedShipmentHistory:
+        try:
+            shipments = data.get("shipments", [])
+            if not shipments:
+                raise ValueError("No se encontraron envíos para esta guía.")
+            
+            events = shipments[0].get("events", [])
+            if not isinstance(events, list):
+                events = []
+
+            return NormalizedShipmentHistory(
+                tracking_id=tracking_id,
+                events=events, # DHL ya los entrega ordenados cronológicamente
+            )
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=f"Error al procesar historial de DHL: {str(e)}",
+            )

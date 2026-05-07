@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Path
 
-from src.schemas.tracking import DHLRawResponse, ShipmentLocation, ShipmentStatus
+from src.schemas.tracking import DHLRawResponse, ShipmentLocation, ShipmentStatus, ShipmentHistory
 from src.services.dhl import DHLService
 from src.services.tracking import TrackingService
 
@@ -204,4 +204,54 @@ async def get_location(tracking_id: str = TRACKING_ID_PATH):
         location=normalized_location.location,
         city=normalized_location.city,
         timestamp=normalized_location.timestamp,
+    )
+
+@router.get(
+    "/history/{tracking_id}",
+    tags=["Tracking"],
+    summary="Obtener historial completo del paquete",
+    description=(
+        "Consulta DHL y devuelve el historial completo de estados y ubicaciones del paquete. "
+        "Este endpoint es útil para revisar toda la evolución del envío."
+    ),
+    response_model=ShipmentHistory,
+    responses={
+        200: {
+            "description": "Operación exitosa",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "tracking_id": "7777777770",
+                        "events": [
+                            {
+                                "status": "TRANSIT",
+                                "description": "The shipment is in transit",
+                                "timestamp": "2024-04-16T09:30:00Z",
+                                "location": {
+                                    "address": {"addressLocality": "Madrid", "countryCode": "ES"}
+                                }
+                            }
+                        ]
+                    }
+                }
+            },
+        },
+        422: {
+            "description": "Estructura de DHL inválida",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Estructura de DHL inválida: El campo 'events' no es una lista."}
+                }
+            },
+        },
+        **COMMON_ERROR_RESPONSES,
+    }
+)
+async def get_history(tracking_id: str = TRACKING_ID_PATH):
+    """Obtiene el historial completo de estados y ubicaciones del paquete."""
+    normalized_history = await TrackingService().get_history(tracking_id)
+
+    return ShipmentHistory(
+        tracking_id=normalized_history.tracking_id,
+        events=normalized_history.events,
     )

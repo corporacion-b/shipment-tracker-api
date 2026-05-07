@@ -43,6 +43,32 @@ class ShipmentLocation(BaseModel):
         json_schema_extra={"example": "2024-04-16T09:30:00Z"},
     )
 
+class ShipmentHistory(BaseModel):
+    tracking_id: str = Field(
+        ...,
+        description="Número de guía DHL consultado.",
+        json_schema_extra={"example": "7777777770"},
+    )
+    events: list[dict[str, Any]] = Field(
+        ...,
+        description="Lista de eventos históricos del envío devueltos por DHL.",
+        json_schema_extra={
+            "example": [
+                {
+                    "status": "TRANSIT",
+                    "description": "The shipment is in transit",
+                    "timestamp": "2024-04-16T09:30:00Z",
+                    "location": {
+                        "address": {
+                            "addressLocality": "Madrid - Spain",
+                            "countryCode": "ES",
+                        }
+                    },
+                }
+            ]
+        },
+    )
+
 
 class DHLRawResponse(BaseModel):
     shipments: list[dict[str, Any]] = Field(

@@ -43,3 +43,14 @@ def test_mysql_upsert_location_uses_mysql_conflict_syntax(monkeypatch):
 
     assert "VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP)" in sql
     assert "ON DUPLICATE KEY UPDATE" in sql
+
+def test_mysql_upsert_history_uses_mysql_conflict_syntax(monkeypatch):
+    monkeypatch.setattr(
+        "src.repositories.shipment_repository.database",
+        Database("mysql://root:secret@localhost:3306/shipments"),
+    )
+
+    sql = ShipmentRepository._upsert_history_sql()
+
+    assert "VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)" in sql
+    assert "ON DUPLICATE KEY UPDATE" in sql
