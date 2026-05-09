@@ -121,7 +121,7 @@ class Database:
         return """
             CREATE TABLE IF NOT EXISTS users (
                 id_user INT NOT NULL AUTO_INCREMENT,
-                email VARCHAR(255) NOT NULL,
+                email VARCHAR(255) NOT NULL UNIQUE,
                 hashed_password VARCHAR(255) NOT NULL,
                 is_active TINYINT NOT NULL DEFAULT 1,
                 created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
