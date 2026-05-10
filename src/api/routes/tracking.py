@@ -1,5 +1,6 @@
-from fastapi import APIRouter, Path
+from fastapi import APIRouter, Depends, Path
 
+from src.api.dependencies import get_current_user
 from src.schemas.tracking import DHLRawResponse, ShipmentLocation, ShipmentStatus
 from src.services.dhl import DHLService
 from src.services.tracking import TrackingService
@@ -148,9 +149,15 @@ async def get_full_tracking(tracking_id: str = TRACKING_ID_PATH):
         **COMMON_ERROR_RESPONSES,
     },
 )
-async def get_status(tracking_id: str = TRACKING_ID_PATH, user_id: int = 1):
+async def get_status(
+    tracking_id: str = TRACKING_ID_PATH,
+    current_user: dict = Depends(get_current_user),
+):
     """Obtiene únicamente el estado y descripción del paquete."""
-    normalized_status = await TrackingService().get_status(tracking_id, user_id)
+    normalized_status = await TrackingService().get_status(
+        tracking_id,
+        current_user["id_user"],
+    )
 
     return ShipmentStatus(
         tracking_id=normalized_status.tracking_id,

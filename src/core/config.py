@@ -6,7 +6,7 @@ class Settings(BaseSettings):
     DHL_API_KEY: Optional[str] = None
     DHL_API_SECRET: Optional[str] = None
     DHL_BASE_URL: str = "https://shipment-tracker-mock-api-production.up.railway.app/track/shipments"
-    DATABASE_URL: str = "mysql://root:Josuemysql22*@127.0.0.1:3306/shipments"
+    DATABASE_URL: str = "mysql://root:secret@127.0.0.1:3307/shipments"
     JWT_SECRET_KEY: str = "change-this-secret-in-production"
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
