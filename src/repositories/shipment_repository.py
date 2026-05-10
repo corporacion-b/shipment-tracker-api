@@ -12,7 +12,6 @@ class NormalizedShipmentStatus:
     id_user: int
     initial_location: int
     end_location: int
-    current_location: int | None
 
 @dataclass(frozen=True)
 class NormalizedShipmentLocation:
@@ -27,13 +26,12 @@ class ShipmentRepository:
         return """
             INSERT INTO shipments (
                 dhl_id, status, weight, initial_location, 
-                end_location, current_location, id_user
+                end_location, id_user
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s)
             ON DUPLICATE KEY UPDATE
                 status = VALUES(status),
                 weight = VALUES(weight),
-                current_location = VALUES(current_location),
                 updated_at = CURRENT_TIMESTAMP
         """
 
@@ -47,21 +45,22 @@ class ShipmentRepository:
                 shipment.weight,
                 shipment.initial_location,
                 shipment.end_location,
-                shipment.current_location,
                 shipment.id_user
             ))
 
     @staticmethod
     def _upsert_location_sql() -> str:
         return """
-            INSERT INTO shipments (tracking_id, location, city, timestamp, raw_payload, last_synced_at)
-            VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+            INSERT INTO locations (id_location, country_code, city, latitude, longitude)
+            VALUES (%s, %s, %s, %s, %s)
             ON DUPLICATE KEY UPDATE
-                location = VALUES(location),
-                city = VALUES(city),
-                timestamp = VALUES(timestamp),
-                raw_payload = VALUES(raw_payload),
-                last_synced_at = CURRENT_TIMESTAMP
+                updated_at = CURRENT_TIMESTAMP
+
+            INSERT INTO shipments (current_location)
+            VALUES (%s)
+            ON DUPLICATE KEY UPDATE
+                current_location = VALUES(current_location),
+                updated_at = CURRENT_TIMESTAMP
         """
 
     def upsert_location(self, shipment_location: NormalizedShipmentLocation, raw_payload: dict):

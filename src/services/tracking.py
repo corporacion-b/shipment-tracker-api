@@ -6,6 +6,7 @@ from src.repositories.shipment_repository import (
     NormalizedShipmentLocation,
     ShipmentRepository,
 )
+from src.repositories.location_repository import LocationRepository
 from src.services.dhl import DHLService
 
 
@@ -42,35 +43,31 @@ class TrackingService:
         return status_data
 
     @classmethod
-    def _normalize_status(
-        cls,
-        tracking_id: str,
-        data: dict,
-        user_id: int,
-    ) -> NormalizedShipmentStatus:
-        try:
-            shipment_data = data["shipments"][0]
-        except (KeyError, IndexError):
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail="Estructura de DHL inválida.",
-            )
+    def _normalize_status(cls, tracking_id: str, data: dict, user_id: int,) -> NormalizedShipmentStatus:
+        shipment_data = data["shipments"][0]
+        loc_repo = LocationRepository()
 
-        status_data = shipment_data.get("status", {})
+        origin_address = shipment_data.get("origin", {}).get("address", {})
+        origin_city = origin_address.get("addressLocality", "Unknown")
+        origin_cc = origin_address.get("countryCode", "XX")
+
+        dest_address = shipment_data.get("destination", {}).get("address", {})
+        dest_city = dest_address.get("addressLocality", "Unknown")
+        dest_cc = dest_address.get("countryCode", "XX")
+
+        id_initial = loc_repo.get_or_create_location(origin_cc, origin_city)
+        id_end = loc_repo.get_or_create_location(dest_cc, dest_city)
 
         details = shipment_data.get("details", {})
-        weight_info = details.get("weight", {})
-        
-        actual_weight = weight_info.get("value") or shipment_data.get("totalWeight") or 0.0
+        actual_weight = details.get("weight", {}).get("value") or 0.0
 
         return NormalizedShipmentStatus(
             tracking_id=tracking_id,
-            status=status_data.get("status", "UNKNOWN"),
+            status=shipment_data.get("status", {}).get("status", "UNKNOWN"),
             weight=float(actual_weight),
             id_user=user_id,
-            initial_location=1, 
-            end_location=2,      
-            current_location=1    
+            initial_location=id_initial,
+            end_location=id_end          
         )
     
     async def get_location(self, tracking_id: str) -> NormalizedShipmentLocation:
