@@ -27,4 +27,4 @@ class LocationRepository:
                 VALUES (%s, %s, 0.0, 0.0)
             """
             cursor.execute(insert_query, (country_code, city))
-            return cursor.lastrowid # Devuelve el ID recién creado
+            return cursor.lastrowid
