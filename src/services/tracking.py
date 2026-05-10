@@ -13,13 +13,12 @@ class TrackingService:
     def __init__(self, repository: ShipmentRepository | None = None):
         self.repository = repository or ShipmentRepository()
 
-    async def get_status(self, tracking_id: str) -> NormalizedShipmentStatus:
+    async def get_status(self, tracking_id: str, user_id: int) -> NormalizedShipmentStatus:
         data = await DHLService.buscar_en_dhl(tracking_id)
-        normalized_status = self._normalize_status(tracking_id, data)
+        normalized_status = self._normalize_status(tracking_id, data, user_id)
         await to_thread.run_sync(
             self.repository.upsert_status,
             normalized_status,
-            data,
         )
         return normalized_status
 
@@ -47,16 +46,33 @@ class TrackingService:
         cls,
         tracking_id: str,
         data: dict,
+        user_id: int,
     ) -> NormalizedShipmentStatus:
-        status_data = cls._extract_status_data(data)
+        try:
+            shipment_data = data["shipments"][0]
+        except (KeyError, IndexError):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="Estructura de DHL inválida.",
+            )
+
+        status_data = shipment_data.get("status", {})
+
+        details = shipment_data.get("details", {})
+        weight_info = details.get("weight", {})
+        
+        actual_weight = weight_info.get("value") or shipment_data.get("totalWeight") or 0.0
 
         return NormalizedShipmentStatus(
             tracking_id=tracking_id,
-            carrier="DHL",
-            status=status_data.get("status", "N/A"),
-            description=status_data.get("description", "Sin descripción"),
+            status=status_data.get("status", "UNKNOWN"),
+            weight=float(actual_weight),
+            id_user=user_id,
+            initial_location=1, 
+            end_location=2,      
+            current_location=1    
         )
-        
+    
     async def get_location(self, tracking_id: str) -> NormalizedShipmentLocation:
         data = await DHLService.buscar_en_dhl(tracking_id)
         normalized_location = self._normalize_location(tracking_id, data)

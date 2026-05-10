@@ -7,9 +7,12 @@ from src.db.connection import database
 @dataclass(frozen=True)
 class NormalizedShipmentStatus:
     tracking_id: str
-    carrier: str
     status: str
-    description: str
+    weight: float | None
+    id_user: int
+    initial_location: int
+    end_location: int
+    current_location: int | None
 
 @dataclass(frozen=True)
 class NormalizedShipmentLocation:
@@ -20,26 +23,32 @@ class NormalizedShipmentLocation:
 
 class ShipmentRepository:
     @staticmethod
-    def _upsert_status_sql() -> str:
+    def _upsert_shipment_sql() -> str:
         return """
-            INSERT INTO shipments (tracking_id, carrier, current_status, current_description, raw_payload, last_synced_at)
-            VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+            INSERT INTO shipments (
+                dhl_id, status, weight, initial_location, 
+                end_location, current_location, id_user
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             ON DUPLICATE KEY UPDATE
-                carrier = VALUES(carrier),
-                current_status = VALUES(current_status),
-                current_description = VALUES(current_description),
-                raw_payload = VALUES(raw_payload),
-                last_synced_at = CURRENT_TIMESTAMP
+                status = VALUES(status),
+                weight = VALUES(weight),
+                current_location = VALUES(current_location),
+                updated_at = CURRENT_TIMESTAMP
         """
 
-    def upsert_status(self, shipment_status: NormalizedShipmentStatus, raw_payload: dict):
-        payload = json.dumps(raw_payload)
+    def upsert_status(self, shipment: NormalizedShipmentStatus):
         with database.connect() as connection:
             cursor = connection.cursor()
-            query = self._upsert_status_sql()
+            query = self._upsert_shipment_sql()
             cursor.execute(query, (
-                shipment_status.tracking_id, shipment_status.carrier,
-                shipment_status.status, shipment_status.description, payload
+                shipment.tracking_id,
+                shipment.status,
+                shipment.weight,
+                shipment.initial_location,
+                shipment.end_location,
+                shipment.current_location,
+                shipment.id_user
             ))
 
     @staticmethod
