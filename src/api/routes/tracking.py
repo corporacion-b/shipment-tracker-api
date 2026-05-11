@@ -182,7 +182,7 @@ async def get_status(
                 "application/json": {
                     "example": {
                         "tracking_id": "7777777770",
-                        "location": "Spain",
+                        "country_code": "ES",
                         "city": "Madrid",
                         "timestamp": "2024-04-16T09:30:00Z",
                     }
@@ -204,11 +204,11 @@ async def get_status(
 )
 async def get_location(tracking_id: str = TRACKING_ID_PATH):
     """Obtiene la ubicación actual del paquete."""
-    normalized_location = await TrackingService().get_location(tracking_id)
+    normalized_location = await TrackingService().get_current_location(tracking_id)
 
     return ShipmentLocation(
         tracking_id=normalized_location.tracking_id,
-        location=normalized_location.location,
+        country_code=normalized_location.country_code,
         city=normalized_location.city,
         timestamp=normalized_location.timestamp,
     )

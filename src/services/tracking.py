@@ -70,38 +70,54 @@ class TrackingService:
             end_location=id_end          
         )
     
-    async def get_location(self, tracking_id: str) -> NormalizedShipmentLocation:
+    async def get_current_location(self, tracking_id: str) -> NormalizedShipmentLocation:
         data = await DHLService.buscar_en_dhl(tracking_id)
+        loc_repo = LocationRepository()
+        
         normalized_location = self._normalize_location(tracking_id, data)
-        await to_thread.run_sync(
-            self.repository.upsert_location,
-            normalized_location,
-            data,
+       
+        location_id = loc_repo.get_or_create_location(
+            country_code=normalized_location.country_code,
+            city=normalized_location.city
         )
+        
+        # 3. Actualizar la FK 'current_location' en la tabla 'shipments'
+        await to_thread.run_sync(
+            self.repository.update_current_location,
+            tracking_id,
+            location_id
+        )
+        
         return normalized_location
-    
+
     @classmethod
     def _normalize_location(
         cls,
         tracking_id: str,
         data: dict,
     ) -> NormalizedShipmentLocation:
-        status_data = cls._extract_status_data(data)
-        location_dict = status_data.get("location") or {}
-        address_dict = location_dict.get("address") or {}
-        raw_locality = address_dict.get("addressLocality", "")
+        try:
+            shipment_data = data["shipments"][0]
+            status_data = shipment_data.get("status", {})
+            location_dict = status_data.get("location", {})
+            address_dict = location_dict.get("address", {})
+            city_value = address_dict.get("addressLocality")
+            country_value = address_dict.get("countryCode")
 
-        if " - " in raw_locality:
-            city, country = raw_locality.split(" - ", 1)
-            city_value = city.strip()
-            location_value = country.strip()
-        else:
-            city_value = raw_locality.strip()
-            location_value = address_dict.get("countryCode", "").strip()
+            if city_value and " - " in city_value:
+                city_value = city_value.split(" - ")[0].strip()
 
-        return NormalizedShipmentLocation(
-            tracking_id=tracking_id,
-            location=location_value or "País desconocido",
-            city=city_value or "Ciudad desconocida",
-            timestamp=status_data.get("timestamp", "Fecha desconocida"),
-        )
+            return NormalizedShipmentLocation(
+                tracking_id=tracking_id,
+                country_code=country_value or "XX",
+                city=city_value or "Unknown City",
+                timestamp=status_data.get("timestamp", "Fecha desconocida"),
+            )
+        except (KeyError, IndexError):
+            # Fallback en caso de que la estructura sea distinta
+            return NormalizedShipmentLocation(
+                tracking_id=tracking_id,
+                country_code="XX",
+                city="Unknown",
+                timestamp="N/A"
+            )

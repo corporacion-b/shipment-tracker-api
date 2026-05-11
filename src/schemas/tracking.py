@@ -28,7 +28,7 @@ class ShipmentLocation(BaseModel):
         description="Número de guía DHL consultado.",
         json_schema_extra={"example": "7777777770"},
     )
-    location: str = Field(
+    country_code: str = Field(
         ...,
         description="País o ubicación principal del último estado reportado por DHL.",
         json_schema_extra={"example": "Spain"},
