@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, status
+from fastapi.security import OAuth2PasswordRequestForm
 
 from src.api.dependencies import get_current_user
-from src.schemas.auth import Token, UserCreate, UserLogin, UserRead
+from src.schemas.auth import Token, UserCreate, UserRead
 from src.services.auth import AuthService
 
 
@@ -26,9 +27,9 @@ async def register(user_data: UserCreate):
     response_model=Token,
     summary="Iniciar sesión",
 )
-async def login(credentials: UserLogin):
+async def login(credentials: OAuth2PasswordRequestForm = Depends()):
     user = AuthService().authenticate_user(
-        email=credentials.email,
+        email=credentials.username,
         password=credentials.password,
     )
     access_token = AuthService.create_token_for_user(user)

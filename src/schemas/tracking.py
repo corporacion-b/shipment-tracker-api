@@ -14,11 +14,12 @@ class ShipmentStatus(BaseModel):
         description="Estado actual del envío.",
         json_schema_extra={"example": "TRANSIT"},
     )
-    description: str = Field(
+    weight: float = Field(
         ...,
-        description="Descripción legible del estado actual del envío.",
-        json_schema_extra={"example": "The shipment is in transit"},
+        description="Peso del envío.",
+        json_schema_extra={"example": 10.5},
     )
+    
 
 
 class ShipmentLocation(BaseModel):

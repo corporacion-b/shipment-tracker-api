@@ -8,7 +8,7 @@ from urllib.parse import urlparse
 load_dotenv()
 
 os.environ.setdefault("DHL_API_KEY", "dummy-key")
-os.environ.setdefault("DATABASE_URL", "mysql://root:secret@127.0.0.1:3307/shipments")
+os.environ.setdefault("DATABASE_URL", "mysql://root:Josuemysql22*@127.0.0.1:3306/shipments")
 
 from src.db.connection import init_db
 from src.main import src
@@ -31,8 +31,10 @@ def clean_test_db():
     connection = pymysql.connect(**get_db_params())
     try:
         with connection.cursor() as cursor:
-            cursor.execute("DELETE FROM tracking_events")
+            cursor.execute("DELETE FROM shipment_history")
             cursor.execute("DELETE FROM shipments")
+            cursor.execute("DELETE FROM locations")
+            cursor.execute("DELETE FROM users")
         yield
     finally:
         connection.close()
