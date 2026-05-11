@@ -202,9 +202,15 @@ async def get_status(
         **COMMON_ERROR_RESPONSES,
     },
 )
-async def get_location(tracking_id: str = TRACKING_ID_PATH):
+async def get_location(
+    tracking_id: str = TRACKING_ID_PATH,
+    current_user: dict = Depends(get_current_user),
+):
     """Obtiene la ubicación actual del paquete."""
-    normalized_location = await TrackingService().get_current_location(tracking_id)
+    normalized_location = await TrackingService().get_current_location(
+        tracking_id,
+        current_user["id_user"],
+    )
 
     return ShipmentLocation(
         tracking_id=normalized_location.tracking_id,

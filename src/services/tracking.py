@@ -70,7 +70,7 @@ class TrackingService:
             end_location=id_end          
         )
     
-    async def get_current_location(self, tracking_id: str) -> NormalizedShipmentLocation:
+    async def get_current_location(self, tracking_id: str, user_id: int) -> NormalizedShipmentLocation:
         data = await DHLService.buscar_en_dhl(tracking_id)
         loc_repo = LocationRepository()
         
