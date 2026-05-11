@@ -3,13 +3,24 @@ name: CI/CD Shipment Tracker API
 on:
   push:
     branches: [ "main", "develop", "feature/*" ]
-    tags: [ "v*" ]  # <--- ESTO ES LO QUE FALTA
+    tags: [ "v*" ] 
   pull_request:
     branches: [ "main", "develop" ]
 
 jobs:
   test-and-build:
     runs-on: ubuntu-latest
+    
+    # Servicio de base de datos para pruebas
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: secret
+          MYSQL_DATABASE: shipments
+        ports:
+          - 3306:3306
+        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
 
     steps:
     - name: Checkout del código
@@ -26,6 +37,9 @@ jobs:
         pip install -r requirements.txt
 
     - name: Ejecutar Pruebas Automatizadas
+      env:
+        # Apuntar a la base de datos del servicio definido arriba
+        DATABASE_URL: mysql://root:secret@127.0.0.1:3306/shipments
       run: |
         pytest
 
@@ -37,6 +51,7 @@ jobs:
         password: ${{ secrets.DOCKERHUB_TOKEN }}
 
     - name: Build and Push
+      if: success()
       uses: docker/build-push-action@v5
       with:
         context: .
@@ -44,4 +59,4 @@ jobs:
         tags: |
           erickyamilrc/shipment-tracker-api:latest
           erickyamilrc/shipment-tracker-api:${{ github.sha }}
-          ${{ startsWith(github.ref, 'refs/tags/') && format('erickyamilrc/shipment-tracker-api:{0}', github.ref_name) || '' }}
+          ${{ contains(github.ref, 'tags/') && format('erickyamilrc/shipment-tracker-api:{0}', github.ref_name) || '' }}
