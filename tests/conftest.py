@@ -1,56 +1,36 @@
-import os
-import pymysql
 import pytest
-from dotenv import load_dotenv
 from fastapi.testclient import TestClient
 from urllib.parse import urlparse
+import pymysql
 
-load_dotenv()
-
-os.environ.setdefault("DHL_API_KEY", "dummy-key")
-os.environ.setdefault("DATABASE_URL", "mysql://root:Josuemysql22*@127.0.0.1:3306/shipments")
-
+from src.main import src as fastapi_app
+from src.core.config import settings
 from src.db.connection import init_db
-from src.main import src
 
-def get_db_params():
-    url = urlparse(os.environ["DATABASE_URL"])
-    return {
-        "host": url.hostname,
-        "port": url.port,
-        "user": url.username,
-        "password": url.password,
-        "database": url.path.lstrip("/"),
-        "cursorclass": pymysql.cursors.DictCursor,
-        "autocommit": True,
-    }
-
-@pytest.fixture
-def clean_test_db():
+@pytest.fixture(scope="session", autouse=True)
+def setup_database():
+    """Inicializa la base de datos una sola vez para toda la sesión de pruebas."""
     init_db()
-    connection = pymysql.connect(**get_db_params())
-    try:
-        with connection.cursor() as cursor:
-            cursor.execute("DELETE FROM shipment_history")
-            cursor.execute("DELETE FROM shipments")
-            cursor.execute("DELETE FROM locations")
-            cursor.execute("DELETE FROM users")
-        yield
-    finally:
-        connection.close()
-
-
-@pytest.fixture
-def client():
-    with TestClient(src) as test_client:
-        yield test_client
-
 
 @pytest.fixture
 def db_connection():
-    init_db()
-    connection = pymysql.connect(**get_db_params())
-    try:
-        yield connection
-    finally:
-        connection.close()
+    """Provee una conexión limpia de pymysql basada en el .env/config."""
+    url = urlparse(settings.DATABASE_URL)
+    connection = pymysql.connect(
+        host=url.hostname or "localhost",
+        port=url.port or 3306,
+        user=url.username,
+        password=url.password,
+        database=url.path.lstrip("/"),
+        cursorclass=pymysql.cursors.DictCursor,
+        autocommit=False  # Importante para poder hacer rollback
+    )
+    yield connection
+    connection.rollback() # Revierte cambios para que el siguiente test empiece limpio
+    connection.close()
+
+@pytest.fixture
+def client():
+    """Cliente para realizar peticiones a los endpoints."""
+    with TestClient(fastapi_app) as test_client:
+        yield test_client

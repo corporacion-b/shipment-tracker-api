@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from src.core.config import settings
@@ -11,13 +12,20 @@ def hash_password(password: str) -> str:
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return password_context.verify(plain_password, hashed_password)
 
-def create_access_token(subject: str) -> str:
-    expires_at = datetime.now(timezone.utc) + timedelta(
-        minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
-    )
+def create_access_token(subject: str, expires_delta: Optional[timedelta] = None) -> str:
+    """
+    Crea un token JWT. Permite pasar un expires_delta opcional para pruebas
+    o usar el tiempo por defecto configurado en settings.
+    """
+    if expires_delta:
+        expires_at = datetime.now(timezone.utc) + expires_delta
+    else:
+        expires_at = datetime.now(timezone.utc) + timedelta(
+            minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
+        )
 
     payload = {
-        "sub": subject,
+        "sub": str(subject), # Aseguramos que sea string para evitar JWTClaimsError
         "exp": expires_at,
     }
 
