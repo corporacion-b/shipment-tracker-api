@@ -16,9 +16,9 @@ class NormalizedShipmentStatus:
 @dataclass(frozen=True)
 class NormalizedShipmentLocation:
     tracking_id: str
-    location: str
-    timestamp: str
+    country_code: str
     city: str
+    timestamp: str
 
 class ShipmentRepository:
     @staticmethod
@@ -49,26 +49,16 @@ class ShipmentRepository:
             ))
 
     @staticmethod
-    def _upsert_location_sql() -> str:
+    def _upsert_current_location_sql() -> str:
         return """
-            INSERT INTO locations (id_location, country_code, city, latitude, longitude)
-            VALUES (%s, %s, %s, %s, %s)
-            ON DUPLICATE KEY UPDATE
+            UPDATE shipments 
+            SET current_location = %s,  
                 updated_at = CURRENT_TIMESTAMP
-
-            INSERT INTO shipments (current_location)
-            VALUES (%s)
-            ON DUPLICATE KEY UPDATE
-                current_location = VALUES(current_location),
-                updated_at = CURRENT_TIMESTAMP
+            WHERE dhl_id = %s
         """
 
-    def upsert_location(self, shipment_location: NormalizedShipmentLocation, raw_payload: dict):
-        payload = json.dumps(raw_payload)
+    def update_current_location(self, tracking_id: str, location_id: int):
         with database.connect() as connection:
             cursor = connection.cursor()
-            query = self._upsert_location_sql()
-            cursor.execute(query, (
-                shipment_location.tracking_id, shipment_location.location,
-                shipment_location.city, shipment_location.timestamp, payload
-            ))
+            query = self._upsert_current_location_sql()
+            cursor.execute(query, (location_id, tracking_id))
