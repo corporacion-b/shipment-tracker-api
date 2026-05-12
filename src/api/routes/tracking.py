@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Path
 
 from src.api.dependencies import get_current_user
-from src.schemas.tracking import DHLRawResponse, ShipmentLocation, ShipmentStatus
+from src.schemas.tracking import DHLRawResponse, ShipmentDwellTime, ShipmentLocation, ShipmentStatus
 from src.services.dhl import DHLService
 from src.services.tracking import TrackingService
 
@@ -217,4 +217,67 @@ async def get_location(
         country_code=normalized_location.country_code,
         city=normalized_location.city,
         timestamp=normalized_location.timestamp,
+    )
+
+
+@router.get(
+    "/dwell-time/{tracking_id}",
+    tags=["Tracking"],
+    summary="Obtener tiempo inmóvil del paquete",
+    description=(
+        "Consulta DHL y calcula cuánto tiempo ha permanecido el paquete inmóvil "
+        "en su ubicación actual. Este endpoint no aplica a envíos entregados."
+    ),
+    response_model=ShipmentDwellTime,
+    responses={
+        200: {
+            "description": "Operación exitosa",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "tracking_id": "7777777770",
+                        "status": "TRANSIT",
+                        "country_code": "ES",
+                        "city": "Madrid",
+                        "current_status_timestamp": "2024-04-16T09:30:00Z",
+                        "dwell_time_hours": 48.5,
+                        "dwell_time_days": 2.02,
+                    }
+                }
+            },
+        },
+        422: {
+            "description": (
+                "La estructura del JSON de DHL cambió, es inválida o el envío "
+                "ya fue entregado"
+            ),
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "El dwell time no aplica a envios entregados."
+                    }
+                }
+            },
+        },
+        **COMMON_ERROR_RESPONSES,
+    },
+)
+async def get_dwell_time(
+    tracking_id: str = TRACKING_ID_PATH,
+    current_user: dict = Depends(get_current_user),
+):
+    """Obtiene el tiempo inmóvil estimado del paquete en su ubicación actual."""
+    dwell_time = await TrackingService().get_dwell_time(
+        tracking_id,
+        current_user["id_user"],
+    )
+
+    return ShipmentDwellTime(
+        tracking_id=dwell_time.tracking_id,
+        status=dwell_time.status,
+        country_code=dwell_time.country_code,
+        city=dwell_time.city,
+        current_status_timestamp=dwell_time.current_status_timestamp,
+        dwell_time_hours=dwell_time.dwell_time_hours,
+        dwell_time_days=dwell_time.dwell_time_days,
     )

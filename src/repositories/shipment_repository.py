@@ -20,6 +20,17 @@ class NormalizedShipmentLocation:
     city: str
     timestamp: str
 
+
+@dataclass(frozen=True)
+class NormalizedShipmentDwellTime:
+    tracking_id: str
+    status: str
+    country_code: str
+    city: str
+    current_status_timestamp: str
+    dwell_time_hours: float
+    dwell_time_days: float
+
 class ShipmentRepository:
     @staticmethod
     def _upsert_shipment_sql() -> str:

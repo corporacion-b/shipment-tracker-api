@@ -19,6 +19,6 @@ src.include_router(auth.router)
 src.include_router(tracking.router)
 
 @src.get("/", tags=["General"])
-async def root():
-    """Estado de la API."""
+async def health():
+    """Revisar estado de la API."""
     return {"service": settings.PROJECT_NAME, "status": "online"}

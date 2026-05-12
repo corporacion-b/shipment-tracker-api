@@ -220,47 +220,6 @@ http://127.0.0.1:8000
 | GET | `/shipment/{id}/history` | Lista cronológicamente los puntos de control del paquete. |
 | GET | `/shipment/{id}/dwell-time` | Calcula el tiempo que el paquete ha permanecido inmóvil en la ubicación actual. |
 
-### Ejemplo de respuesta JSON: `/status/{tracking_id}`
-
-```json
-{
-  "tracking_id": "DHL-123",
-  "status": "En transito"
-}
-```
-
-### Ejemplo de respuesta JSON: `/location/{tracking_id}`
-
-```json
-{
-  "tracking_id": "DHL-123",
-  "location": "Madrid"
-}
-```
-
-### Ejemplo de respuesta JSON: `/shipment/{id}/history`
-
-```json
-{
-  "tracking_id": "DHL-123",
-  "history": [
-    "Ciudad de origen",
-    "Centro logístico",
-    "Aduana",
-    "Ciudad de destino"
-  ]
-}
-```
-
-### Ejemplo de respuesta JSON: `/shipment/{id}/dwell-time`
-
-```json
-{
-  "tracking_id": "DHL-123",
-  "days_stationary": 2
-}
-```
-
 ### Manejo de errores
 
 | Código | Descripción |
@@ -278,7 +237,6 @@ http://127.0.0.1:8000
 ## Documentación automática
 
 - Swagger UI: `http://127.0.0.1:8000/docs`
-- Esta interfaz permite explorar los endpoints, probar solicitudes y revisar los modelos de respuesta desde el navegador.
 
 ---
 
@@ -294,8 +252,6 @@ Las pruebas cubren:
 - Obtencion de la ubicacion actual del paquete.
 - Recuperación del historial de checkpoints del envío.
 - Cálculo del tiempo inmóvil en la ubicación actual.
-
-Estas pruebas permiten validar el comportamiento esperado de los endpoints principales y detectar regresiones de forma temprana durante el desarrollo.
 
 ---
 
