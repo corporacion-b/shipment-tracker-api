@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Path
 
 from src.api.dependencies import get_current_user
-from src.schemas.tracking import DHLRawResponse, ShipmentDwellTime, ShipmentLocation, ShipmentStatus
+from src.schemas.tracking import DHLRawResponse, ShipmentDwellTime, ShipmentLocation, ShipmentStatus, ShipmentHistoryResponse
 from src.services.dhl import DHLService
 from src.services.tracking import TrackingService
 
@@ -280,4 +280,26 @@ async def get_dwell_time(
         current_status_timestamp=dwell_time.current_status_timestamp,
         dwell_time_hours=dwell_time.dwell_time_hours,
         dwell_time_days=dwell_time.dwell_time_days,
+    )
+
+@router.get(
+    "/history/{tracking_id}",
+    tags=["Tracking"],
+    summary="Obtener historial de eventos",
+    response_model=ShipmentHistoryResponse,
+    responses={**COMMON_ERROR_RESPONSES},
+)
+async def get_history(
+    tracking_id: str = TRACKING_ID_PATH,
+    current_user: dict = Depends(get_current_user),
+):
+    """Retorna la línea de tiempo de movimientos del paquete."""
+    history_events = await TrackingService().get_history(
+        tracking_id,
+        current_user["id_user"],
+    )
+
+    return ShipmentHistoryResponse(
+        tracking_id=tracking_id,
+        history=history_events
     )

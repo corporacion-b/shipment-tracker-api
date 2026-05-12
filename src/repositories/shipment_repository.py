@@ -31,6 +31,15 @@ class NormalizedShipmentDwellTime:
     dwell_time_hours: float
     dwell_time_days: float
 
+@dataclass(frozen=True)
+class NormalizedHistoryEvent:
+    event_timestamp: str
+    status: str
+    description: str | None
+    raw_payload: str 
+    id_shipment: int
+    id_location: int
+
 class ShipmentRepository:
     @staticmethod
     def _upsert_shipment_sql() -> str:
@@ -73,3 +82,26 @@ class ShipmentRepository:
             cursor = connection.cursor()
             query = self._upsert_current_location_sql()
             cursor.execute(query, (location_id, tracking_id))
+
+    def get_shipment_id_by_tracking(self, tracking_id: str) -> int | None:
+        with database.connect() as connection:
+            cursor = connection.cursor()
+            cursor.execute("SELECT id_shipment FROM shipments WHERE dhl_id = %s", (tracking_id,))
+            result = cursor.fetchone()
+
+            if result:
+                return result.get('id_shipment')
+            return None
+
+    def insert_history_event(self, event: NormalizedHistoryEvent):
+        query = """
+            INSERT INTO shipment_history 
+            (event_timestamp, status, description, raw_payload, id_shipment, id_location)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """
+        with database.connect() as connection:
+            cursor = connection.cursor()
+            cursor.execute(query, (
+                event.event_timestamp, event.status, event.description,
+                event.raw_payload, event.id_shipment, event.id_location
+            ))
