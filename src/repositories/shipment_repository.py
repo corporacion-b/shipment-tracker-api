@@ -93,12 +93,20 @@ class ShipmentRepository:
                 return result.get('id_shipment')
             return None
 
-    def insert_history_event(self, event: NormalizedHistoryEvent):
-        query = """
+    @staticmethod
+    def _upsert_history_sql() -> str:
+        return """
             INSERT INTO shipment_history 
             (event_timestamp, status, description, raw_payload, id_shipment, id_location)
             VALUES (%s, %s, %s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE
+                description = VALUES(description),
+                raw_payload = VALUES(raw_payload),
+                updated_at = CURRENT_TIMESTAMP
         """
+
+    def upsert_history_event(self, event: NormalizedHistoryEvent):
+        query = self._upsert_history_sql()
         with database.connect() as connection:
             cursor = connection.cursor()
             cursor.execute(query, (

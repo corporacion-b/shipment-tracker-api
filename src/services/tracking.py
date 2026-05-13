@@ -321,7 +321,7 @@ class TrackingService:
                 id_shipment=shipment_id,
                 id_location=location_id
             )
-            await to_thread.run_sync(self.repository.insert_history_event, normalized_event)
+            await to_thread.run_sync(self.repository.upsert_history_event, normalized_event)
 
             history_response.append({
                 "event_timestamp": clean_ts,
