@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, timezone
 
 from anyio import to_thread
@@ -7,6 +8,7 @@ from src.repositories.shipment_repository import (
     NormalizedShipmentDwellTime,
     NormalizedShipmentStatus,
     NormalizedShipmentLocation,
+    NormalizedHistoryEvent,
     ShipmentRepository,
 )
 from src.repositories.location_repository import LocationRepository
@@ -289,3 +291,44 @@ class TrackingService:
             dwell_start = event_timestamp
 
         return dwell_start
+
+    async def get_history(self, tracking_id: str, user_id: int) -> list[dict]:
+        data = await DHLService.buscar_en_dhl(tracking_id)
+        shipment_data = self._extract_shipment_data(data)
+        events = self._extract_timeline_events(shipment_data)
+        
+        # Aseguramos que el shipment existe en DB para la FK
+        await self.get_status(tracking_id, user_id) 
+        shipment_id = self.repository.get_shipment_id_by_tracking(tracking_id)
+        loc_repo = LocationRepository()
+
+        history_response = []
+
+        for event in events:
+            loc = self._extract_location_from_event(event)
+            country_code, city = loc if loc else ("XX", "Unknown")
+            
+            location_id = loc_repo.get_or_create_location(country_code, city)
+
+            raw_ts = event.get("timestamp")
+            clean_ts = self._parse_dhl_timestamp(raw_ts).strftime('%Y-%m-%d %H:%M:%S')
+            
+            normalized_event = NormalizedHistoryEvent(
+                event_timestamp=clean_ts,
+                status=event.get("status"),
+                description=event.get("description"),
+                raw_payload=json.dumps(event),
+                id_shipment=shipment_id,
+                id_location=location_id
+            )
+            await to_thread.run_sync(self.repository.upsert_history_event, normalized_event)
+
+            history_response.append({
+                "event_timestamp": clean_ts,
+                "status": event.get("status"),
+                "description": event.get("description"),
+                "city": city,
+                "country_code": country_code
+            })
+            
+        return history_response

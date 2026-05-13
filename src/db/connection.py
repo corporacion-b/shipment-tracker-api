@@ -150,10 +150,22 @@ class Database:
                 id_shipment INT NOT NULL,
                 id_location INT NOT NULL,
                 PRIMARY KEY (id_shipment_history),
-                CONSTRAINT fk_shipment_history_shipments1 FOREIGN KEY (id_shipment)
-                    REFERENCES shipments (id_shipment),
-                CONSTRAINT fk_shipment_history_locations1 FOREIGN KEY (id_location)
+                UNIQUE KEY uq_shipment_history_event (
+                    id_shipment,
+                    event_timestamp,
+                    status,
+                    id_location
+                ),
+                CONSTRAINT fk_shipment_history_shipments1
+                    FOREIGN KEY (id_shipment)
+                    REFERENCES shipments (id_shipment)
+                    ON DELETE NO ACTION
+                    ON UPDATE NO ACTION,
+                CONSTRAINT fk_shipment_history_locations1
+                    FOREIGN KEY (id_location)
                     REFERENCES locations (id_location)
+                    ON DELETE NO ACTION
+                    ON UPDATE NO ACTION
             ) ENGINE=InnoDB
         """
 
