@@ -82,6 +82,31 @@ class ShipmentDwellTime(BaseModel):
         json_schema_extra={"example": 2.02},
     )
 
+class ShipmentHistoryEvent(BaseModel):
+    event_timestamp: str = Field(
+        ..., 
+        description="Fecha y hora del evento."
+    )
+    status: str = Field(
+        ..., 
+        description="Estado en ese momento."
+    )
+    description: str | None = Field(
+        None, 
+        description="Descripción detallada del evento."
+    )
+    city: str = Field(
+        ..., 
+        description="Ciudad donde ocurrió el evento."
+    )
+    country_code: str = Field(
+        ..., 
+        description="Código de país."
+    )
+
+class ShipmentHistoryResponse(BaseModel):
+    tracking_id: str
+    history: list[ShipmentHistoryEvent]
 
 class DHLRawResponse(BaseModel):
     shipments: list[dict[str, Any]] = Field(

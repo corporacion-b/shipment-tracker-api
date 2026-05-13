@@ -180,6 +180,12 @@ class Database:
                 id_shipment INT NOT NULL,
                 id_location INT NOT NULL,
                 PRIMARY KEY (id_shipment_history),
+                UNIQUE KEY uq_shipment_history_event (
+                    id_shipment,
+                    event_timestamp,
+                    status,
+                    id_location
+                ),
                 CONSTRAINT fk_shipment_history_shipments1
                     FOREIGN KEY (id_shipment)
                     REFERENCES shipments (id_shipment)
