@@ -1,8 +1,7 @@
+import pymysql
 from contextlib import contextmanager
 from urllib.parse import urlparse
-
 from src.core.config import settings
-
 
 class Database:
     def __init__(self, database_url: str):
@@ -25,40 +24,19 @@ class Database:
             "port": self.parsed.port or 3306,
             "user": self.parsed.username,
             "password": self.parsed.password,
-            "cursorclass": self._dict_cursor_class(),
+            "cursorclass": pymysql.cursors.DictCursor,
             "autocommit": False,
         }
-
         if include_database:
             kwargs["database"] = self.database_name
-
         return kwargs
-
-    @staticmethod
-    def _dict_cursor_class():
-        try:
-            import pymysql
-        except ImportError as exc:
-            raise RuntimeError(
-                "Para usar MySQL necesitas instalar la dependencia 'pymysql'."
-            ) from exc
-
-        return pymysql.cursors.DictCursor
 
     @contextmanager
     def connect(self):
         if not self.is_mysql:
             raise RuntimeError(f"Base de datos no soportada: {self.database_url}")
 
-        try:
-            import pymysql
-        except ImportError as exc:
-            raise RuntimeError(
-                "Para usar MySQL necesitas instalar la dependencia 'pymysql'."
-            ) from exc
-
         connection = pymysql.connect(**self._connection_kwargs(include_database=True))
-
         try:
             yield connection
             connection.commit()
@@ -69,27 +47,31 @@ class Database:
             connection.close()
 
     def init_schema(self):
+        """Inicializa el esquema manejando el orden de las llaves foráneas."""
         self._create_database_if_missing()
 
-        with self.connect() as connection:
-            cursor = connection.cursor()
-
-            for statement in self._schema_statements():
-                cursor.execute(statement)
+        # Usamos una conexión manual para el control de checks
+        connection = pymysql.connect(**self._connection_kwargs(include_database=True))
+        try:
+            with connection.cursor() as cursor:
+                # PASO CLAVE PARA CI/CD: Desactivar validación de FK temporalmente
+                cursor.execute("SET FOREIGN_KEY_CHECKS = 0;")
+                
+                for statement in self._schema_statements():
+                    cursor.execute(statement)
+                
+                # Reactivar validación
+                cursor.execute("SET FOREIGN_KEY_CHECKS = 1;")
+            connection.commit()
+        finally:
+            connection.close()
 
     def _create_database_if_missing(self):
-        try:
-            import pymysql
-        except ImportError as exc:
-            raise RuntimeError(
-                "Para usar MySQL necesitas instalar la dependencia 'pymysql'."
-            ) from exc
-
         connection = pymysql.connect(**self._connection_kwargs(include_database=False))
         try:
             with connection.cursor() as cursor:
                 cursor.execute(
-                    f"CREATE DATABASE IF NOT EXISTS `{self.database_name}` DEFAULT CHARACTER SET utf8"
+                    f"CREATE DATABASE IF NOT EXISTS `{self.database_name}` DEFAULT CHARACTER SET utf8mb4"
                 )
             connection.commit()
         finally:
@@ -144,26 +126,14 @@ class Database:
                 current_location INT NULL,
                 id_user INT NOT NULL,
                 PRIMARY KEY (id_shipment),
-                CONSTRAINT fk_shipments_locations
-                    FOREIGN KEY (initial_location)
-                    REFERENCES locations (id_location)
-                    ON DELETE NO ACTION
-                    ON UPDATE NO ACTION,
-                CONSTRAINT fk_shipments_locations1
-                    FOREIGN KEY (end_location)
-                    REFERENCES locations (id_location)
-                    ON DELETE NO ACTION
-                    ON UPDATE NO ACTION,
-                CONSTRAINT fk_shipments_locations2
-                    FOREIGN KEY (current_location)
-                    REFERENCES locations (id_location)
-                    ON DELETE NO ACTION
-                    ON UPDATE NO ACTION,
-                CONSTRAINT fk_shipments_users1
-                    FOREIGN KEY (id_user)
+                CONSTRAINT fk_shipments_locations FOREIGN KEY (initial_location)
+                    REFERENCES locations (id_location),
+                CONSTRAINT fk_shipments_locations1 FOREIGN KEY (end_location)
+                    REFERENCES locations (id_location),
+                CONSTRAINT fk_shipments_locations2 FOREIGN KEY (current_location)
+                    REFERENCES locations (id_location),
+                CONSTRAINT fk_shipments_users1 FOREIGN KEY (id_user)
                     REFERENCES users (id_user)
-                    ON DELETE NO ACTION
-                    ON UPDATE NO ACTION
             ) ENGINE=InnoDB
         """
 
@@ -200,7 +170,6 @@ class Database:
         """
 
 database = Database(settings.DATABASE_URL)
-
 
 def init_db():
     database.init_schema()
