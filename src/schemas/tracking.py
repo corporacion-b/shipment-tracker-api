@@ -3,6 +3,41 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 
+class LocationRead(BaseModel):
+    id_location: int | None = None
+    country_code: str | None = None
+    city: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+class ShipmentUserRead(BaseModel):
+    id_user: int
+    email: str
+
+
+class ShipmentRead(BaseModel):
+    id_shipment: int
+    tracking_id: str
+    status: str
+    weight: float | None = None
+    created_at: str
+    updated_at: str
+    user: ShipmentUserRead
+    initial_location: LocationRead | None = None
+    end_location: LocationRead | None = None
+    current_location: LocationRead | None = None
+
+
+class ShipmentListResponse(BaseModel):
+    items: list[ShipmentRead]
+    total: int
+    page: int
+    page_size: int
+
+
 class ShipmentStatus(BaseModel):
     tracking_id: str = Field(
         ...,
