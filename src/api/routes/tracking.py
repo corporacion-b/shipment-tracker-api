@@ -1,7 +1,16 @@
-from fastapi import APIRouter, Depends, Path
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 
 from src.api.dependencies import get_current_user
-from src.schemas.tracking import DHLRawResponse, ShipmentDwellTime, ShipmentLocation, ShipmentStatus, ShipmentHistoryResponse
+from src.repositories.shipment_repository import ShipmentRepository
+from src.schemas.tracking import (
+    DHLRawResponse,
+    ShipmentDwellTime,
+    ShipmentListResponse,
+    ShipmentLocation,
+    ShipmentRead,
+    ShipmentStatus,
+    ShipmentHistoryResponse,
+)
 from src.services.dhl import DHLService
 from src.services.tracking import TrackingService
 
@@ -112,6 +121,91 @@ COMMON_ERROR_RESPONSES = {
 async def get_full_tracking(tracking_id: str = TRACKING_ID_PATH):
     """Retorna la respuesta completa de DHL sin filtros."""
     return await DHLService.buscar_en_dhl(tracking_id)
+
+
+@router.get(
+    "/shipments",
+    tags=["Shipments"],
+    summary="Listar pedidos del usuario autenticado",
+    response_model=ShipmentListResponse,
+)
+async def list_shipments(
+    status_filter: str | None = Query(default=None, alias="status"),
+    q: str | None = Query(default=None, description="Busca por número de guía o id interno."),
+    created_from: str | None = None,
+    created_to: str | None = None,
+    updated_from: str | None = None,
+    updated_to: str | None = None,
+    sort: str = Query(default="-updated_at"),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=100),
+    current_user: dict = Depends(get_current_user),
+):
+    return ShipmentRepository().list_for_user(
+        user_id=current_user["id_user"],
+        status=status_filter,
+        q=q,
+        created_from=created_from,
+        created_to=created_to,
+        updated_from=updated_from,
+        updated_to=updated_to,
+        sort=sort,
+        page=page,
+        page_size=page_size,
+    )
+
+
+@router.get(
+    "/shipments/{tracking_id}",
+    tags=["Shipments"],
+    summary="Obtener detalle de un pedido",
+    response_model=ShipmentRead,
+)
+async def get_shipment_detail(
+    tracking_id: str = TRACKING_ID_PATH,
+    current_user: dict = Depends(get_current_user),
+):
+    shipment = ShipmentRepository().get_detail_for_user(
+        tracking_id,
+        current_user["id_user"],
+    )
+
+    if shipment is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Guía '{tracking_id}' no existe para el usuario autenticado.",
+        )
+
+    return shipment
+
+
+@router.post(
+    "/shipments/{tracking_id}/refresh",
+    tags=["Shipments"],
+    summary="Consultar DHL y actualizar un pedido",
+    response_model=ShipmentRead,
+)
+async def refresh_shipment(
+    tracking_id: str = TRACKING_ID_PATH,
+    current_user: dict = Depends(get_current_user),
+):
+    tracking_service = TrackingService()
+    await tracking_service.get_status(tracking_id, current_user["id_user"])
+    await tracking_service.get_current_location(tracking_id, current_user["id_user"])
+    await tracking_service.get_history(tracking_id, current_user["id_user"])
+
+    shipment = ShipmentRepository().get_detail_for_user(
+        tracking_id,
+        current_user["id_user"],
+    )
+
+    if shipment is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Guía '{tracking_id}' no existe para el usuario autenticado.",
+        )
+
+    return shipment
 
 
 @router.get(
