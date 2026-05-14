@@ -43,4 +43,4 @@ def test_tracking_unauthorized(client):
     """Prueba que la ruta protegida devuelva 401 sin token."""
     # Usamos una ruta que sabemos que existe según tu lista
     response = client.get("/full-tracking/1234567890")
-    assert response.status_code == 404
+    assert response.status_code == 401
