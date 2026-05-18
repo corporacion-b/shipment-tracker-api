@@ -1,46 +1,150 @@
+import uuid
+
 import pytest
 
-# Datos de ejemplo que simulan una respuesta exitosa de DHL
-MOCK_DHL_RESPONSE = {
-    "shipments": [{
-        "id": "1234567890",
-        "status": {"status": "DELIVERED", "description": "Paquete entregado"},
-        "events": [
-            {"timestamp": "2026-05-10T10:00:00Z", "location": {"address": {"addressLocality": "CDMX"}}, "description": "En ruta"},
-            {"timestamp": "2026-05-11T09:00:00Z", "location": {"address": {"addressLocality": "Veracruz"}}, "description": "Entregado"}
-        ]
-    }]
-}
 
-def test_get_tracking_success(client, db_connection, monkeypatch):
-    """Prueba que el flujo de tracking funcione usando /full-tracking/."""
-    
-    # 1. Registro y Login para obtener Token
-    import uuid
-    email = f"track_{uuid.uuid4().hex[:4]}@test.com"
-    client.post("/auth/register", json={"email": email, "password": "password123", "full_name": "Tracker"})
-    login_res = client.post("/auth/login", data={"username": email, "password": "password123"})
-    token = login_res.json()["access_token"]
-    headers = {"Authorization": f"Bearer {token}"}
+def unique_tracking_id(prefix="TEST"):
+    return f"{prefix}{uuid.uuid4().hex[:10].upper()}"
 
-    # 2. MOCKING
-    async def mock_get_dhl(*args, **kwargs):
-        return MOCK_DHL_RESPONSE
-    monkeypatch.setattr("src.services.dhl.DHLService.buscar_en_dhl", mock_get_dhl)
 
-    # 3. EJECUCIÓN (Usando la ruta real: /full-tracking/)
-    tracking_number = "1234567890"
-    response = client.get(f"/full-tracking/{tracking_number}", headers=headers)
+@pytest.mark.integration
+def test_full_tracking_returns_raw_dhl_payload(client, mock_dhl_service):
+    response = client.get("/full-tracking/7KQ4M9X2LA")
 
-    # 4. VALIDACIÓN
-    data = response.json()
-    print(f"DEBUG: La API devolvió: {data}") # Esto te dirá qué campos hay
-    # Cambia el assert a algo más genérico por ahora para que pase:
     assert response.status_code == 200
-    assert data is not None
-    
-def test_tracking_unauthorized(client):
-    """Prueba que la ruta protegida devuelva 401 sin token."""
-    # Usamos una ruta que sabemos que existe según tu lista
-    response = client.get("/full-tracking/1234567890")
-    assert response.status_code == 401
+    assert response.json() == mock_dhl_service
+
+
+@pytest.mark.integration
+def test_protected_tracking_routes_require_token(client):
+    tracking_id = "7KQ4M9X2LA"
+
+    protected_routes = [
+        ("GET", f"/status/{tracking_id}"),
+        ("GET", f"/location/{tracking_id}"),
+        ("GET", f"/dwell-time/{tracking_id}"),
+        ("GET", f"/history/{tracking_id}"),
+        ("GET", "/shipments"),
+        ("GET", f"/shipments/{tracking_id}"),
+        ("POST", f"/shipments/{tracking_id}/refresh"),
+    ]
+
+    for method, path in protected_routes:
+        response = client.request(method, path)
+        assert response.status_code == 401
+
+
+@pytest.mark.integration
+def test_status_endpoint_normalizes_dhl_payload(client, auth_headers, mock_dhl_service):
+    tracking_id = unique_tracking_id("STS")
+
+    response = client.get(f"/status/{tracking_id}", headers=auth_headers)
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "tracking_id": tracking_id,
+        "status": "Shipment information received",
+        "weight": 0.65,
+    }
+
+
+@pytest.mark.integration
+def test_location_endpoint_normalizes_current_location(client, auth_headers, mock_dhl_service):
+    tracking_id = unique_tracking_id("LOC")
+
+    response = client.get(f"/location/{tracking_id}", headers=auth_headers)
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "tracking_id": tracking_id,
+        "country_code": "MX",
+        "city": "Saltillo",
+        "timestamp": "2026-05-01T08:45:00Z",
+    }
+
+
+@pytest.mark.integration
+def test_dwell_time_endpoint_returns_elapsed_time(client, auth_headers, mock_dhl_service):
+    tracking_id = unique_tracking_id("DWL")
+
+    response = client.get(f"/dwell-time/{tracking_id}", headers=auth_headers)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["tracking_id"] == tracking_id
+    assert data["status"] == "SHIPMENT INFORMATION RECEIVED"
+    assert data["country_code"] == "MX"
+    assert data["city"] == "Saltillo"
+    assert data["current_status_timestamp"] == "2026-05-01T08:45:00Z"
+    assert data["dwell_time_hours"] >= 0
+    assert data["dwell_time_days"] >= 0
+
+
+@pytest.mark.integration
+def test_history_endpoint_returns_timeline_events(client, auth_headers, mock_dhl_service):
+    tracking_id = unique_tracking_id("HIS")
+
+    response = client.get(f"/history/{tracking_id}", headers=auth_headers)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["tracking_id"] == tracking_id
+    assert len(data["history"]) == 3
+    assert data["history"][0] == {
+        "event_timestamp": "2026-05-01 08:45:00",
+        "status": "Shipment information received",
+        "description": "Shipment data has been received",
+        "city": "Saltillo",
+        "country_code": "MX",
+    }
+
+
+@pytest.mark.integration
+def test_refresh_persists_shipment_and_detail_can_be_read(
+    client,
+    auth_headers,
+    mock_dhl_service,
+):
+    tracking_id = unique_tracking_id("REF")
+
+    refresh_response = client.post(
+        f"/shipments/{tracking_id}/refresh",
+        headers=auth_headers,
+    )
+    assert refresh_response.status_code == 200
+
+    detail_response = client.get(
+        f"/shipments/{tracking_id}",
+        headers=auth_headers,
+    )
+    assert detail_response.status_code == 200
+    detail = detail_response.json()
+    assert detail["tracking_id"] == tracking_id
+    assert detail["status"] == "Shipment information received"
+    assert detail["weight"] == 0.65
+    assert detail["initial_location"]["city"] == "Aguascalientes"
+    assert detail["end_location"]["city"] == "Guadalajara"
+    assert detail["current_location"]["city"] == "Saltillo"
+
+
+@pytest.mark.integration
+def test_shipments_list_supports_search_and_pagination(
+    client,
+    auth_headers,
+    mock_dhl_service,
+):
+    tracking_id = unique_tracking_id("LST")
+    client.post(f"/shipments/{tracking_id}/refresh", headers=auth_headers)
+
+    response = client.get(
+        "/shipments",
+        params={"q": tracking_id, "page": 1, "page_size": 10},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 1
+    assert data["page"] == 1
+    assert data["page_size"] == 10
+    assert data["items"][0]["tracking_id"] == tracking_id

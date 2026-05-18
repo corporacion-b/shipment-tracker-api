@@ -253,6 +253,10 @@ Las pruebas cubren:
 - Recuperación del historial de checkpoints del envío.
 - Cálculo del tiempo inmóvil en la ubicación actual.
 
+La estrategia de pruebas separa casos unitarios, integración con MySQL y
+contratos externos contra la API mock de DHL. Consulta `docs/testing.md` para
+los comandos por tipo de prueba, incluyendo `--run-external`.
+
 ---
 
 ## Integrantes

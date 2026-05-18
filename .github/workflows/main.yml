@@ -52,13 +52,12 @@ jobs:
       env:
         DATABASE_URL: mysql://root:secret@127.0.0.1:3306/shipments
         PYTHONPATH: .
-        # Para testeo
-        DHL_API_KEY: "dummy_key_for_testing" 
-        # Para JWT
+        DHL_API_KEY: "1234567890ABCDEF1234567890ABCDEF"
         JWT_SECRET_KEY: "test_secret_key"
         JWT_ALGORITHM: "HS256"
       run: |
-        python -m pytest tests/ -v
+        python -m pytest -m unit -v
+        python -m pytest -m integration -v
 
     - name: Login en Docker Hub
       if: success() && github.event_name != 'pull_request'

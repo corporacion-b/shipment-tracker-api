@@ -7,6 +7,9 @@ from fastapi import HTTPException
 from src.services.dhl import DHLService
 
 
+pytestmark = pytest.mark.unit
+
+
 @pytest.mark.anyio
 @patch("httpx.AsyncClient.get")
 async def test_buscar_en_dhl_timeout_returns_504(mock_get):
