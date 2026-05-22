@@ -4,6 +4,10 @@ from jose import jwt
 from src.core.security import hash_password, verify_password, create_access_token
 from src.core.config import settings
 
+
+pytestmark = pytest.mark.unit
+
+
 def test_password_hashing():
     """Verifica que las contraseñas se encripten y validen correctamente."""
     password = "mi_clave_secreta_123"
