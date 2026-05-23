@@ -128,8 +128,14 @@ DHL_API_KEY=your_dhl_api_key
 DHL_API_SECRET=your_dhl_api_secret
 DHL_BASE_URL=https://api-eu.dhl.com/track/shipments
 DATABASE_URL=mysql://root:secret@127.0.0.1:3307/shipments
+JWT_SECRET_KEY=change-this-secret-in-production
+BREVO_API_KEY=your_brevo_api_key
+BREVO_SENDER_EMAIL=no-reply@your-domain.com
+BREVO_SENDER_NAME=Shipment Tracker
+FRONTEND_BASE_URL=http://localhost:5173
+EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES=1440
+EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS=60
 ```
----
 
 ## Desarrollo local
 
