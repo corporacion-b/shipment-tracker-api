@@ -10,6 +10,12 @@ class Settings(BaseSettings):
     JWT_SECRET_KEY: str = "change-this-secret-in-production"
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    BREVO_API_KEY: Optional[str] = None
+    BREVO_SENDER_EMAIL: Optional[str] = None
+    BREVO_SENDER_NAME: str = "Shipment Tracker"
+    FRONTEND_BASE_URL: str = "http://localhost:5173"
+    EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES: int = 1440
+    EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS: int = 60
     FRONTEND_ORIGINS: list[str] = [
         "http://localhost:5173",
         "http://127.0.0.1:5173",

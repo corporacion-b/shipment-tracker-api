@@ -27,6 +27,10 @@ services:
         condition: service_healthy
     environment:
       - DATABASE_URL=mysql://root:secret@mysql:3306/shipments
+      - BREVO_API_KEY=${BREVO_API_KEY:-}
+      - BREVO_SENDER_EMAIL=${BREVO_SENDER_EMAIL:-}
+      - BREVO_SENDER_NAME=${BREVO_SENDER_NAME:-Shipment Tracker}
+      - FRONTEND_BASE_URL=${FRONTEND_BASE_URL:-http://localhost:5173}
     ports:
       - "8000:8000"
     networks:         

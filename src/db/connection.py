@@ -59,6 +59,8 @@ class Database:
                 
                 for statement in self._schema_statements():
                     cursor.execute(statement)
+
+                self._ensure_runtime_schema(cursor)
                 
                 # Reactivar validación
                 cursor.execute("SET FOREIGN_KEY_CHECKS = 1;")
@@ -81,6 +83,7 @@ class Database:
         return [
             self._locations_schema_sql(),
             self._users_schema_sql(),
+            self._email_verification_tokens_schema_sql(),
             self._shipments_schema_sql(),
             self._shipment_history_schema_sql(),
         ]
@@ -106,9 +109,29 @@ class Database:
                 email VARCHAR(255) NOT NULL UNIQUE,
                 hashed_password VARCHAR(255) NOT NULL,
                 is_active TINYINT NOT NULL DEFAULT 1,
+                email_verified_at TIMESTAMP NULL,
                 created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                 PRIMARY KEY (id_user)
+            ) ENGINE=InnoDB
+        """
+
+    def _email_verification_tokens_schema_sql(self) -> str:
+        return """
+            CREATE TABLE IF NOT EXISTS email_verification_tokens (
+                id_email_verification_token INT NOT NULL AUTO_INCREMENT,
+                id_user INT NOT NULL,
+                token_hash CHAR(64) NOT NULL,
+                expires_at TIMESTAMP NOT NULL,
+                consumed_at TIMESTAMP NULL,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (id_email_verification_token),
+                UNIQUE KEY uq_email_verification_tokens_token_hash (token_hash),
+                KEY ix_email_verification_tokens_user_created (id_user, created_at),
+                CONSTRAINT fk_email_verification_tokens_users
+                    FOREIGN KEY (id_user)
+                    REFERENCES users (id_user)
+                    ON DELETE CASCADE
             ) ENGINE=InnoDB
         """
 
@@ -168,6 +191,28 @@ class Database:
                     ON UPDATE NO ACTION
             ) ENGINE=InnoDB
         """
+
+    def _ensure_runtime_schema(self, cursor):
+        if not self._column_exists(cursor, "users", "email_verified_at"):
+            cursor.execute(
+                """
+                ALTER TABLE users
+                ADD COLUMN email_verified_at TIMESTAMP NULL AFTER is_active
+                """
+            )
+
+    def _column_exists(self, cursor, table_name: str, column_name: str) -> bool:
+        cursor.execute(
+            """
+            SELECT COUNT(*) AS total
+            FROM information_schema.columns
+            WHERE table_schema = %s
+              AND table_name = %s
+              AND column_name = %s
+            """,
+            (self.database_name, table_name, column_name),
+        )
+        return cursor.fetchone()["total"] > 0
 
 database = Database(settings.DATABASE_URL)
 
