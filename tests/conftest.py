@@ -8,9 +8,12 @@ from fastapi.testclient import TestClient
 
 os.environ.setdefault("DHL_API_KEY", "1234567890ABCDEF1234567890ABCDEF")
 os.environ.setdefault("JWT_SECRET_KEY", "test_secret_key")
+os.environ.setdefault("DATABASE_URL", "mysql://root:secret@127.0.0.1:3307/shipments_test")
+os.environ.setdefault("BREVO_API_KEY", "test_brevo_key")
+os.environ.setdefault("BREVO_SENDER_EMAIL", "no-reply@example.com")
 
 from src.core.config import settings
-from src.db.connection import init_db
+from src.db.connection import database, init_db
 from src.main import src as fastapi_app
 
 
@@ -59,6 +62,31 @@ def client():
         yield test_client
 
 
+@pytest.fixture(autouse=True)
+def mock_email_delivery(monkeypatch):
+    monkeypatch.setattr(
+        "src.services.email.BrevoEmailService.send_verification_email",
+        lambda self, email, verification_url: None,
+    )
+
+
+@pytest.fixture
+def verify_test_user_email():
+    def _verify(email: str) -> None:
+        with database.connect() as connection:
+            cursor = connection.cursor()
+            cursor.execute(
+                """
+                UPDATE users
+                SET email_verified_at = CURRENT_TIMESTAMP
+                WHERE email = %s
+                """,
+                (email,),
+            )
+
+    return _verify
+
+
 @pytest.fixture
 def unique_email():
     return f"tester_{uuid.uuid4().hex}@example.com"
@@ -70,13 +98,14 @@ def anyio_backend():
 
 
 @pytest.fixture
-def auth_headers(client, unique_email):
+def auth_headers(client, unique_email, verify_test_user_email):
     password = "password123"
     register_response = client.post(
         "/auth/register",
         json={"email": unique_email, "password": password},
     )
     assert register_response.status_code == 201
+    verify_test_user_email(unique_email)
 
     login_response = client.post(
         "/auth/login",

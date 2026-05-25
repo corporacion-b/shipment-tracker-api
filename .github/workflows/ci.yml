@@ -38,7 +38,6 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-        pip install pytest-anyio # Mantenido por seguridad, se sugiere agregar a requirements.txt
 
     - name: Esperar a que MySQL esté listo
       run: |
@@ -47,6 +46,13 @@ jobs:
           echo "Esperando a MySQL..."
           sleep 2
         done
+
+    - name: Ejecutar migraciones Alembic
+      env:
+        DATABASE_URL: mysql://root:secret@127.0.0.1:3306/shipments
+        PYTHONPATH: .
+      run: |
+        alembic upgrade head
 
     - name: Ejecutar Pruebas Automatizadas (Unitarias e Integración)
       env:

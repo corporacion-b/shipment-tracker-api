@@ -18,10 +18,13 @@ if config.config_file_name is not None:
 def get_url():
     # Toma DATABASE_URL del entorno. Si no existe, usa tu string local por defecto.
     # Usamos mysql+pymysql para que SQLAlchemy sepa qué driver utilizar en Python.
-    return os.getenv(
+    url = os.getenv(
         "DATABASE_URL", 
         "mysql+pymysql://root:secret@127.0.0.1:3306/shipments"
     )
+    if url.startswith("mysql://"):
+        return url.replace("mysql://", "mysql+pymysql://", 1)
+    return url
 
 def run_migrations_offline() -> None:
     """Ejecuta migraciones en modo 'offline'."""
