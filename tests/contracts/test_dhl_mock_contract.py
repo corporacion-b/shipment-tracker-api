@@ -55,6 +55,14 @@ def test_dhl_mock_shipment_contract(tracking_id):
         headers={"DHL-API-Key": api_key},
         timeout=10.0,
     )
+    if response.status_code == 404:
+        error_payload = response.json()
+        if error_payload.get("message") == "Application not found":
+            pytest.skip("Railway DHL mock API is not available.")
+
+    if response.status_code == 403:
+        pytest.skip("Railway DHL mock API blocked this host (not in allowlist).")
+
     assert response.status_code == 200
 
     payload = response.json()
