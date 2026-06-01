@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 
-from src.api.dependencies import get_current_user
+from src.api.dependencies import get_current_user, oauth2_scheme
 from src.repositories.shipment_repository import ShipmentRepository
 from src.schemas.tracking import (
     DHLRawResponse,
@@ -12,6 +12,8 @@ from src.schemas.tracking import (
     ShipmentHistoryResponse,
 )
 from src.services.dhl import DHLService
+from src.services.risk_analyzer import RiskAnalyzerClient
+from src.services.shipment_refresh import ShipmentRefreshService
 from src.services.tracking import TrackingService
 
 
@@ -179,6 +181,29 @@ async def get_shipment_detail(
     return shipment
 
 
+@router.delete(
+    "/shipments/{tracking_id}",
+    tags=["Shipments"],
+    summary="Borrar un pedido del usuario autenticado",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_shipment(
+    tracking_id: str = TRACKING_ID_PATH,
+    current_user: dict = Depends(get_current_user),
+    token: str = Depends(oauth2_scheme),
+):
+    shipment_repository = ShipmentRepository()
+    deleted = shipment_repository.delete_for_user(tracking_id, current_user["id_user"])
+
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Guía '{tracking_id}' no existe para el usuario autenticado.",
+        )
+
+    await RiskAnalyzerClient().delete_alerts_for_shipment(token, tracking_id)
+
+
 @router.post(
     "/shipments/{tracking_id}/refresh",
     tags=["Shipments"],
@@ -188,15 +213,12 @@ async def get_shipment_detail(
 async def refresh_shipment(
     tracking_id: str = TRACKING_ID_PATH,
     current_user: dict = Depends(get_current_user),
+    token: str = Depends(oauth2_scheme),
 ):
-    tracking_service = TrackingService()
-    await tracking_service.get_status(tracking_id, current_user["id_user"])
-    await tracking_service.get_current_location(tracking_id, current_user["id_user"])
-    await tracking_service.get_history(tracking_id, current_user["id_user"])
-
-    shipment = ShipmentRepository().get_detail_for_user(
+    shipment = await ShipmentRefreshService().refresh_and_evaluate(
         tracking_id,
         current_user["id_user"],
+        token,
     )
 
     if shipment is None:
@@ -361,10 +383,7 @@ async def get_dwell_time(
     current_user: dict = Depends(get_current_user),
 ):
     """Obtiene el tiempo inmóvil estimado del paquete en su ubicación actual."""
-    dwell_time = await TrackingService().get_dwell_time(
-        tracking_id,
-        current_user["id_user"],
-    )
+    dwell_time = await TrackingService().get_dwell_time(tracking_id)
 
     return ShipmentDwellTime(
         tracking_id=dwell_time.tracking_id,

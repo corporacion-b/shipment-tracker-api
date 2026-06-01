@@ -95,9 +95,7 @@ class TrackingService:
         
         return normalized_location
 
-    async def get_dwell_time(self, tracking_id: str, user_id: int) -> NormalizedShipmentDwellTime:
-        del user_id
-
+    async def get_dwell_time(self, tracking_id: str) -> NormalizedShipmentDwellTime:
         data = await DHLService.buscar_en_dhl(tracking_id)
         shipment_data = self._extract_shipment_data(data)
         status_data = self._extract_status_data(data)
