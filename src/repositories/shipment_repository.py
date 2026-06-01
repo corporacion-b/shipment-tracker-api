@@ -1,4 +1,3 @@
-import json
 from dataclasses import dataclass
 from typing import Any
 
@@ -310,3 +309,46 @@ class ShipmentRepository:
             return None
 
         return self._shipment_from_row(row)
+
+    def list_polling_targets(self) -> list[dict]:
+        with database.connect() as connection:
+            cursor = connection.cursor()
+            cursor.execute(
+                """
+                    SELECT dhl_id AS tracking_id, id_user
+                    FROM shipments
+                    ORDER BY updated_at ASC
+                """
+            )
+            return cursor.fetchall()
+
+    def delete_for_user(self, tracking_id: str, user_id: int) -> bool:
+        with database.connect() as connection:
+            cursor = connection.cursor()
+            cursor.execute(
+                """
+                    SELECT id_shipment
+                    FROM shipments
+                    WHERE dhl_id = %s
+                      AND id_user = %s
+                """,
+                (tracking_id, user_id),
+            )
+            shipment = cursor.fetchone()
+            if shipment is None:
+                return False
+
+            shipment_id = shipment["id_shipment"]
+            cursor.execute(
+                "DELETE FROM shipment_history WHERE id_shipment = %s",
+                (shipment_id,),
+            )
+            cursor.execute(
+                """
+                    DELETE FROM shipments
+                    WHERE id_shipment = %s
+                      AND id_user = %s
+                """,
+                (shipment_id, user_id),
+            )
+            return cursor.rowcount > 0

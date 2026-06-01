@@ -1,12 +1,5 @@
-import json
-from dataclasses import dataclass
-
 from src.db.connection import database
 
-@dataclass(frozen=True)
-class NormalizedOriginDestination:
-    country_code: str
-    city: str
 
 class LocationRepository:
     @staticmethod

@@ -1,4 +1,4 @@
-# DHL-Shipment-Tracker-API
+# shipment-tracker-api
 
 <p align="center">
   API de rastreo de envíos construida con FastAPI que consume la DHL API.
@@ -11,238 +11,74 @@
   <img src="https://img.shields.io/badge/Docker-Containerized-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker">
 </p>
 
----
-
-
-## Problema
-
-Consultar el estado de un envío desde distintas fuentes suele implicar respuestas poco uniformes o resultados imprecisos.
-
-## Solucion
-
-`shipment-tracker-api` centraliza la consulta del envío en un endpoint HTTP simple y devuelve una respuesta estructurada con el identificador, el estado actual, la ubicación y los días en espera.
-
-## Enfoque tecnico
-
-El servicio fue desarrollado con FastAPI y se valida con un enfoque "shift left" mediante pruebas automatizadas con `pytest` y `TestClient`. Además, el proyecto cuenta con un pipeline CI/CD que construye y publica la imagen Docker en Docker Hub para facilitar su ejecución y despliegue.
-
----
-
-## Caracteristicas
-
-- Respuestas JSON consistentes y fáciles de consumir.
-- Manejo de errores para consultas inválidas o envíos no encontrados.
-- Pruebas automatizadas del flujo principal.
-- Contenerización con Docker.
-
----
-
-## Arquitectura del servicio
-
-<p align="center">
-  <img src="./docs/arquitectura.png" alt="Diagrama de arquitectura del servicio" width="900">
-</p>
-
-La arquitectura se organiza alrededor de `shipment-tracker-api` como servicio central de consulta. Un cliente, ya sea desde Postman o desde un frontend, envía solicitudes al servicio para obtener información de rastreo. A partir de estas solicitudes, la API consume la DHL API para recuperar datos del envío, como estatus, ubicación, historial y tiempo inmóvil.
-
-`shipment-tracker-api` consulta la DHL API, guarda datos en MySQL y los envía a `shipment-risk-analyzer` para el análisis de riesgo.
-
----
-
-## Stack tecnológico del proyecto
-
-| Categoría | Herramientas |
-| --- | --- |
-| Backend | Python, FastAPI |
-| Testing | PyTest |
-| Base de datos | MySQL, Alembic |
-| Control de versiones | Git, GitHub |
-| CI/CD | GitHub Actions, GitHub Secrets |
-| Contenedores | Docker, Docker Compose, Docker Hub |
-| Documentación y pruebas | Swagger, Postman |
-| Desarrollo | VSCode |
-| Gestión del proyecto | Trello, Discord |
-| Herramientas de apoyo | Excalidraw, Google Docs, herramientas de IA |
-
----
-
-## Pipeline CI/CD
-
-<p align="center">
-  <img src="./docs/pipeline.png" alt="Diagrama del pipeline CI/CD" width="900">
-</p>
-
-El flujo de trabajo parte de `main`, desde donde se crean ramas `feature` para nuevas funcionalidades y ramas `fix` para correcciones. Una vez desarrollado el cambio, este se integra mediante un pull request hacia `develop`, donde pasa por una etapa de revisión en parejas, validación de comportamiento y pruebas unitarias.
-
-Si la revisión o las pruebas fallan, el flujo regresa a una rama de corrección para ajustar el cambio antes de volver a evaluarlo. Cuando el cambio es aprobado, entra a la fase de despliegue e integración, donde GitHub Actions ejecuta el workflow, levanta un entorno de prueba similar a producción, corre pruebas automatizadas, construye la imagen Docker y la publica. Finalmente, tras completar el proceso, los cambios se integran en `main`.
-
----
-
-## Estructura del proyecto
-
-```text
-shipment-tracker-api/
-├── .github/
-│   └── workflows/
-│       └── ci.yml
-├── src/
-│   └── # Código fuente de la API
-├── tests/
-│   └── # Pruebas automatizadas
-├── Dockerfile
-├── docker-compose.yml
-├── .env.example
-├── .gitignore
-├── requirements.txt
-├── LICENSE
-└── README.md
-```
+API principal del sistema Shipment Tracker. Consulte [corporacion-b/.github](https://github.com/corporacion-b/.github) para la descripción completa del proyecto y las instrucciones de ejecución con Docker Compose.
 
 ---
 
 ## Requisitos previos
 
-- Python 3.10 o superior
-- `pip`
-- Git
-- Docker
-- Docker Compose
-- Credenciales de acceso a la DHL API
-- Variables de entorno configuradas
-
-Antes de ejecutar el proyecto, asegúrate de contar con acceso a la DHL API, definir las variables necesarias y tener disponible un entorno local o en contenedor para la base de datos y la aplicación.
+- Docker y Docker Compose
+- Los tres repositorios clonados en la carpeta raíz del proyecto (ver [corporacion-b/.github](https://github.com/corporacion-b/.github))
 
 ---
 
-## Variables de entorno
+## Ejecución
 
-El proyecto usa variables de entorno para configurar la aplicación, la base de datos y la integración con la DHL API. En local, estas variables se definen en un archivo `.env`.
-
-Para CI/CD, los datos sensibles no se guardan en el repositorio. En su lugar, se almacenan en `GitHub Secrets` para que el pipeline pueda usarlos de forma segura.
-
-### Ejemplo de archivo `.env`
-
-```env
-PROJECT_NAME=Shipment Tracker API
-DHL_API_KEY=your_dhl_api_key
-DHL_API_SECRET=your_dhl_api_secret
-DHL_BASE_URL=https://api-eu.dhl.com/track/shipments
-DATABASE_URL=mysql://root:secret@127.0.0.1:3307/shipments
-JWT_SECRET_KEY=change-this-secret-in-production
-BREVO_API_KEY=your_brevo_api_key
-BREVO_SENDER_EMAIL=no-reply@your-domain.com
-BREVO_SENDER_NAME=Shipment Tracker
-FRONTEND_BASE_URL=http://localhost:5173
-EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES=1440
-EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS=60
-```
-
-## Desarrollo local
-
-### 1. Levantar MySQL
-
-Desde la raíz del proyecto:
+Este servicio se levanta junto con el resto del sistema desde la carpeta raíz del proyecto:
 
 ```bash
-docker compose up -d mysql
+cp .env.example .env
+docker compose up --build
 ```
 
-Esto crea un contenedor MySQL 8 con:
-
-- host: `localhost`
-- puerto: `3307`
-- usuario: `root`
-- contraseña: `secret`
-- base de datos: `shipments`
-
-
-### 2. Instalar dependencias de Python
-
-```bash
-pip install -r requirements.txt
-```
-
-### 3. Arrancar la API
-
-```bash
-uvicorn src.main:src --reload
-```
-
-Para ejecución local, `DATABASE_URL` debe apuntar a MySQL expuesto en tu máquina:
-
-```env
-DATABASE_URL=mysql://root:secret@127.0.0.1:3307/shipments
-```
-
-La API queda disponible en:
-
-```text
-http://127.0.0.1:8000
-```
+Las variables de entorno se configuran en el `.env` de la raíz. La API queda disponible en `http://localhost:8000`.
 
 ---
 
-## Ejecución con imagen Docker
+## Endpoints
 
-### 1. Descargar la imagen
-
-```bash
-docker pull erickyamilrc/shipment-tracker-api:latest
-```
-
-### 2. Ejecutar la API con MySQL en Docker Compose
-
-```bash
-docker compose up -d
-```
-
-La aplicación no debe conectarse a `localhost`, sino al servicio `mysql` usando el puerto interno de MySQL:
-
-```env
-DATABASE_URL=mysql://root:secret@mysql:3306/shipments
-```
-
-Al arrancar:
-
-- Docker Compose levanta los servicios `api` y `mysql`
-- La API usa la imagen publicada del proyecto
-- La aplicación se conecta a MySQL mediante la red interna de Docker
-
-La API queda disponible en:
-
-```text
-http://127.0.0.1:8000
-```
-
-
----
-
-## Endpoints disponibles
+**Auth**
 
 | Método | Endpoint | Descripción |
 | --- | --- | --- |
-| GET | `/status/{tracking_id}` | Obtiene el estado actual del paquete. |
-| GET | `/location/{tracking_id}` | Devuelve la ubicación actual del envío. |
-| GET | `/shipment/{id}/history` | Lista cronológicamente los puntos de control del paquete. |
-| GET | `/shipment/{id}/dwell-time` | Calcula el tiempo que el paquete ha permanecido inmóvil en la ubicación actual. |
+| POST | `/auth/register` | Registrar usuario |
+| POST | `/auth/login` | Iniciar sesión |
+| POST | `/auth/verify-email` | Verificar correo |
+| POST | `/auth/resend-verification` | Reenviar verificación de correo |
+| GET | `/auth/me` | Obtener usuario autenticado |
+
+**Shipments**
+
+| Método | Endpoint | Descripción |
+| --- | --- | --- |
+| GET | `/shipments` | Listar pedidos del usuario autenticado |
+| GET | `/shipments/{tracking_id}` | Obtener detalle de un pedido |
+| DELETE | `/shipments/{tracking_id}` | Borrar un pedido |
+| POST | `/shipments/{tracking_id}/refresh` | Consultar DHL y actualizar un pedido |
+
+**Tracking**
+
+| Método | Endpoint | Descripción |
+| --- | --- | --- |
+| GET | `/status/{tracking_id}` | Estado actual del paquete |
+| GET | `/location/{tracking_id}` | Ubicación actual del envío |
+| GET | `/history/{tracking_id}` | Historial de eventos |
+| GET | `/dwell-time/{tracking_id}` | Tiempo inmóvil en ubicación actual |
+| GET | `/full-tracking/{tracking_id}` | Respuesta completa sin filtrar de DHL |
 
 ### Manejo de errores
 
 | Código | Descripción |
 | --- | --- |
-| `400 Bad Request` | El formato del `id` es inválido o faltan parámetros obligatorios. |
-| `401/403 Unauthorized` | Fallo en la autenticación o falta de permisos para consultar el envío. |
-| `404 Not Found` | El número de guía no existe en los registros de DHL. |
-| `429 Too Many Requests` | El cliente ha excedido el límite de peticiones permitido. |
-| `500 Internal Server Error` | Error genérico no controlado en el servidor. |
-| `502 Bad Gateway` | La API de DHL devolvió una respuesta inválida o inesperada. |
-| `503 Service Unavailable` | La API de DHL no responde o se encuentra en mantenimiento. |
+| `400` | Formato de `id` inválido o parámetros faltantes |
+| `401/403` | Fallo en autenticación o permisos insuficientes |
+| `404` | Número de guía no encontrado |
+| `429` | Límite de peticiones excedido |
+| `500` | Error genérico del servidor |
+| `502` | Respuesta inválida de la API DHL |
+| `503` | API DHL no disponible |
 
----
-
-## Documentación automática
-
-- Swagger UI: `http://127.0.0.1:8000/docs`
+Documentación automática: `http://localhost:8000/docs`
 
 ---
 
@@ -251,25 +87,3 @@ http://127.0.0.1:8000
 ```bash
 pytest
 ```
-
-Las pruebas cubren:
-
-- Consulta del estado actual del envío.
-- Obtencion de la ubicacion actual del paquete.
-- Recuperación del historial de checkpoints del envío.
-- Cálculo del tiempo inmóvil en la ubicación actual.
-
-La estrategia de pruebas separa casos unitarios, integración con MySQL y
-contratos externos contra la API mock de DHL. Consulta `docs/testing.md` para
-los comandos por tipo de prueba, incluyendo `--run-external`.
-
----
-
-## Integrantes
-
-| Rol | Nombre |
-| --- | --- |
-| Tech Lead | Enrique Vido |
-| Backend | Josue Rosaldo |
-| QA/DevOps | Erick Rodriguez |
-| Docs | Maria Montserrat |
