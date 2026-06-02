@@ -20,7 +20,7 @@ def get_url():
     # Usamos mysql+pymysql para que SQLAlchemy sepa qué driver utilizar en Python.
     url = os.getenv(
         "DATABASE_URL", 
-        "mysql+pymysql://root:secret@127.0.0.1:3306/shipments"
+        "mysql+pymysql://root:Josuemysql22*@127.0.0.1:3306/shipments"
     )
     if url.startswith("mysql://"):
         return url.replace("mysql://", "mysql+pymysql://", 1)

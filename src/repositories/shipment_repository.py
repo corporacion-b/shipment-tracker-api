@@ -19,7 +19,8 @@ class NormalizedShipmentLocation:
     country_code: str
     city: str
     timestamp: str
-
+    latitude: float | None = None
+    longitude: float | None = None
 
 @dataclass(frozen=True)
 class NormalizedShipmentDwellTime:
