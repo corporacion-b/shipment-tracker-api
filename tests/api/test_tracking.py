@@ -60,6 +60,8 @@ def test_location_endpoint_normalizes_current_location(client, auth_headers, moc
         "country_code": "MX",
         "city": "Saltillo",
         "timestamp": "2026-05-01T08:45:00Z",
+        "latitude": 25.43819,
+        "longitude": -100.973678,
     }
 
 
