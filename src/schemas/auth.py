@@ -6,11 +6,6 @@ class UserCreate(BaseModel):
     password: str = Field(..., min_length=8)
 
 
-class UserLogin(BaseModel):
-    email: EmailStr
-    password: str
-
-
 class UserRead(BaseModel):
     id_user: int
     email: EmailStr

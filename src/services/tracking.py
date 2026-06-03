@@ -21,11 +21,45 @@ class TrackingService:
 
     async def get_status(self, tracking_id: str, user_id: int) -> NormalizedShipmentStatus:
         data = await DHLService.buscar_en_dhl(tracking_id)
-        normalized_status = self._normalize_status(tracking_id, data, user_id)
+        loc_repo = LocationRepository()
+        
+        shipment_data = data["shipments"][0]
+
+        origin_address = shipment_data.get("origin", {}).get("address", {})
+        origin_city = origin_address.get("addressLocality", "Unknown")
+        origin_cc = origin_address.get("countryCode", "XX")
+        if origin_city and " - " in origin_city:
+            origin_city = origin_city.split(" - ")[0].strip()
+
+        dest_address = shipment_data.get("destination", {}).get("address", {})
+        dest_city = dest_address.get("addressLocality", "Unknown")
+        dest_cc = dest_address.get("countryCode", "XX")
+        if dest_city and " - " in dest_city:
+            dest_city = dest_city.split(" - ")[0].strip()
+
+        origin_lat, origin_lon = await DHLService.obtener_coordenadas(origin_city)
+        dest_lat, dest_lon = await DHLService.obtener_coordenadas(dest_city)
+
+        id_initial = loc_repo.get_or_create_location(origin_cc, origin_city, origin_lat, origin_lon)
+        id_end = loc_repo.get_or_create_location(dest_cc, dest_city, dest_lat, dest_lon)
+
+        details = shipment_data.get("details", {})
+        actual_weight = details.get("weight", {}).get("value") or 0.0
+
+        normalized_status = NormalizedShipmentStatus(
+            tracking_id=tracking_id,
+            status=shipment_data.get("status", {}).get("status", "UNKNOWN"),
+            weight=float(actual_weight),
+            id_user=user_id,
+            initial_location=id_initial,
+            end_location=id_end          
+        )
+
         await to_thread.run_sync(
             self.repository.upsert_status,
             normalized_status,
         )
+        
         return normalized_status
 
     @staticmethod
@@ -47,46 +81,39 @@ class TrackingService:
 
         return status_data
 
-    @classmethod
-    def _normalize_status(cls, tracking_id: str, data: dict, user_id: int,) -> NormalizedShipmentStatus:
-        shipment_data = data["shipments"][0]
-        loc_repo = LocationRepository()
-
-        origin_address = shipment_data.get("origin", {}).get("address", {})
-        origin_city = origin_address.get("addressLocality", "Unknown")
-        origin_cc = origin_address.get("countryCode", "XX")
-
-        dest_address = shipment_data.get("destination", {}).get("address", {})
-        dest_city = dest_address.get("addressLocality", "Unknown")
-        dest_cc = dest_address.get("countryCode", "XX")
-
-        id_initial = loc_repo.get_or_create_location(origin_cc, origin_city)
-        id_end = loc_repo.get_or_create_location(dest_cc, dest_city)
-
-        details = shipment_data.get("details", {})
-        actual_weight = details.get("weight", {}).get("value") or 0.0
-
-        return NormalizedShipmentStatus(
-            tracking_id=tracking_id,
-            status=shipment_data.get("status", {}).get("status", "UNKNOWN"),
-            weight=float(actual_weight),
-            id_user=user_id,
-            initial_location=id_initial,
-            end_location=id_end          
-        )
-    
     async def get_current_location(self, tracking_id: str, user_id: int) -> NormalizedShipmentLocation:
         data = await DHLService.buscar_en_dhl(tracking_id)
         loc_repo = LocationRepository()
+    
+        shipment_data = data["shipments"][0]
+        status_data = shipment_data.get("status", {})
+        location_dict = status_data.get("location", {})
+        address_dict = location_dict.get("address", {})
         
-        normalized_location = self._normalize_location(tracking_id, data)
-       
-        location_id = loc_repo.get_or_create_location(
-            country_code=normalized_location.country_code,
-            city=normalized_location.city
+        city_value = address_dict.get("addressLocality", "Unknown City")
+        country_value = address_dict.get("countryCode", "XX")
+
+        if city_value and " - " in city_value:
+            city_value = city_value.split(" - ")[0].strip()
+        
+        lat, lon = await DHLService.obtener_coordenadas(city_value)
+        
+        normalized_location = NormalizedShipmentLocation(
+            tracking_id=tracking_id,
+            country_code=country_value,
+            city=city_value,
+            timestamp=status_data.get("timestamp", "Fecha desconocida"),
+            latitude=lat,
+            longitude=lon
         )
         
-        # 3. Actualizar la FK 'current_location' en la tabla 'shipments'
+        location_id = loc_repo.get_or_create_location(
+            country_code=normalized_location.country_code,
+            city=normalized_location.city,
+            latitude=lat,
+            longitude=lon
+        )
+        
         await to_thread.run_sync(
             self.repository.update_current_location,
             tracking_id,
@@ -95,9 +122,7 @@ class TrackingService:
         
         return normalized_location
 
-    async def get_dwell_time(self, tracking_id: str, user_id: int) -> NormalizedShipmentDwellTime:
-        del user_id
-
+    async def get_dwell_time(self, tracking_id: str) -> NormalizedShipmentDwellTime:
         data = await DHLService.buscar_en_dhl(tracking_id)
         shipment_data = self._extract_shipment_data(data)
         status_data = self._extract_status_data(data)
@@ -155,38 +180,6 @@ class TrackingService:
             )
 
         return shipment
-
-    @classmethod
-    def _normalize_location(
-        cls,
-        tracking_id: str,
-        data: dict,
-    ) -> NormalizedShipmentLocation:
-        try:
-            shipment_data = data["shipments"][0]
-            status_data = shipment_data.get("status", {})
-            location_dict = status_data.get("location", {})
-            address_dict = location_dict.get("address", {})
-            city_value = address_dict.get("addressLocality")
-            country_value = address_dict.get("countryCode")
-
-            if city_value and " - " in city_value:
-                city_value = city_value.split(" - ")[0].strip()
-
-            return NormalizedShipmentLocation(
-                tracking_id=tracking_id,
-                country_code=country_value or "XX",
-                city=city_value or "Unknown City",
-                timestamp=status_data.get("timestamp", "Fecha desconocida"),
-            )
-        except (KeyError, IndexError):
-            # Fallback en caso de que la estructura sea distinta
-            return NormalizedShipmentLocation(
-                tracking_id=tracking_id,
-                country_code="XX",
-                city="Unknown",
-                timestamp="N/A"
-            )
 
     @staticmethod
     def _extract_location_from_status(status_data: dict) -> dict[str, str]:
@@ -297,7 +290,6 @@ class TrackingService:
         shipment_data = self._extract_shipment_data(data)
         events = self._extract_timeline_events(shipment_data)
         
-        # Aseguramos que el shipment existe en DB para la FK
         await self.get_status(tracking_id, user_id) 
         shipment_id = self.repository.get_shipment_id_by_tracking(tracking_id)
         loc_repo = LocationRepository()
@@ -307,8 +299,13 @@ class TrackingService:
         for event in events:
             loc = self._extract_location_from_event(event)
             country_code, city = loc if loc else ("XX", "Unknown")
+
+            event_location_dict = event.get("location", {})
+            event_geo = event_location_dict.get("geo", {})
+            event_lat = event_geo.get("latitude") or event_location_dict.get("latitude")
+            event_lon = event_geo.get("longitude") or event_location_dict.get("longitude")
             
-            location_id = loc_repo.get_or_create_location(country_code, city)
+            location_id = loc_repo.get_or_create_location(country_code, city, latitude=float(event_lat) if event_lat else None, longitude=float(event_lon) if event_lon else None,)
 
             raw_ts = event.get("timestamp")
             clean_ts = self._parse_dhl_timestamp(raw_ts).strftime('%Y-%m-%d %H:%M:%S')
@@ -328,7 +325,9 @@ class TrackingService:
                 "status": event.get("status"),
                 "description": event.get("description"),
                 "city": city,
-                "country_code": country_code
+                "country_code": country_code,
+                "latitude": float(event_lat) if event_lat else None,
+                "longitude": float(event_lon) if event_lon else None,
             })
             
         return history_response
