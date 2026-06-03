@@ -29,7 +29,7 @@ class ShipmentRefreshService:
 
         dwell_time_days = None
         try:
-            dwell_time = await self.tracking_service.get_dwell_time(tracking_id, user_id)
+            dwell_time = await self.tracking_service.get_dwell_time(tracking_id)
             dwell_time_days = dwell_time.dwell_time_days
         except HTTPException:
             dwell_time_days = None

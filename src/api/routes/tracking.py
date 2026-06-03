@@ -333,6 +333,8 @@ async def get_location(
         country_code=normalized_location.country_code,
         city=normalized_location.city,
         timestamp=normalized_location.timestamp,
+        latitude=normalized_location.latitude,
+        longitude=normalized_location.longitude,
     )
 
 
