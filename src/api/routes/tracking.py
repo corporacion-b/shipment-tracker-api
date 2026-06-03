@@ -363,7 +363,6 @@ async def get_dwell_time(
     """Obtiene el tiempo inmóvil estimado del paquete en su ubicación actual."""
     dwell_time = await TrackingService().get_dwell_time(
         tracking_id,
-        current_user["id_user"],
     )
 
     return ShipmentDwellTime(
