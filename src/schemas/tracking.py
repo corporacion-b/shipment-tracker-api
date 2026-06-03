@@ -73,16 +73,6 @@ class ShipmentLocation(BaseModel):
         description="Ciudad del último estado reportado por DHL.",
         json_schema_extra={"example": "Madrid"},
     )
-    latitude: float | None = Field(
-        None,
-        description="Latitud de la ubicación actual.",
-        json_schema_extra={"example": 18.924209},
-    )
-    longitude: float | None = Field(
-        None,
-        description="Longitud de la ubicación actual.",
-        json_schema_extra={"example": -99.221566},
-    )
     timestamp: str = Field(
         ...,
         description="Fecha y hora del último estado reportado por DHL.",
