@@ -1,0 +1,151 @@
+name: CI/CD Shipment Tracker API
+
+on:
+  push:
+    branches: ["main", "develop", "feature/*"]
+    tags: ["v*"]
+  pull_request:
+    branches: ["main", "develop"]
+
+jobs:
+
+  # ══════════════════════════════════════════════════════════════
+  # JOB 1 — Tests unitarios e integración
+  # Este job DEBE pasar para que el pipeline continúe.
+  # No depende de ningún servicio externo (el mock DHL está mockeado).
+  # ══════════════════════════════════════════════════════════════
+  tests:
+    name: Unit & Integration Tests
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: secret
+          MYSQL_DATABASE: shipments
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      - name: Configurar Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Esperar a que MySQL esté listo
+        run: |
+          sudo apt-get update && sudo apt-get install -y mysql-client
+          until mysqladmin ping -h"127.0.0.1" -P"3306" --silent; do
+            echo "Esperando a MySQL..."
+            sleep 2
+          done
+
+      - name: Ejecutar migraciones Alembic
+        env:
+          DATABASE_URL: mysql://root:secret@127.0.0.1:3306/shipments
+          PYTHONPATH: .
+        run: alembic upgrade head
+
+      - name: Ejecutar tests unitarios e integración
+        env:
+          DATABASE_URL: mysql://root:secret@127.0.0.1:3306/shipments
+          PYTHONPATH: .
+          DHL_API_KEY: ${{ secrets.API_KEY }}
+          DHL_BASE_URL: ${{ secrets.DHL_BASE_URL }}
+          JWT_SECRET_KEY: "test_secret_key"
+          JWT_ALGORITHM: "HS256"
+          BREVO_API_KEY: "test_brevo_key"
+          BREVO_SENDER_EMAIL: "no-reply@example.com"
+        run: |
+          python -m pytest -m "unit or integration" -v --tb=short
+
+  # ══════════════════════════════════════════════════════════════
+  # JOB 2 — Tests de contrato contra el mock DHL en Railway
+  #
+  # IMPORTANTE: Este job usa continue-on-error: true porque el mock
+  # de Railway tiene un allowlist de IPs. Los runners de GitHub Actions
+  # tienen IPs dinámicas que probablemente no estén registradas, por lo
+  # que los tests harán SKIP (no FAIL). Eso es el comportamiento correcto.
+  #
+  # Este job NUNCA bloquea el pipeline ni el Docker push.
+  # ══════════════════════════════════════════════════════════════
+  contract-tests:
+    name: Contract Tests (DHL Mock)
+    runs-on: ubuntu-latest
+    needs: tests
+    continue-on-error: true
+
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      - name: Configurar Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Ejecutar tests de contrato
+        env:
+          PYTHONPATH: .
+          DHL_API_KEY: ${{ secrets.API_KEY }}
+          DHL_BASE_URL: ${{ secrets.DHL_BASE_URL }}
+          DHL_MOCK_TRACKING_IDS: ${{ secrets.DHL_TRACKING_IDS_OK }}
+          JWT_SECRET_KEY: "test_secret_key"
+          BREVO_API_KEY: "test_brevo_key"
+          BREVO_SENDER_EMAIL: "no-reply@example.com"
+          DATABASE_URL: "mysql://root:secret@127.0.0.1:3306/shipments"
+        run: |
+          python -m pytest -m contract --run-external -v --tb=short -r s
+
+  # ══════════════════════════════════════════════════════════════
+  # JOB 3 — Build y Push de la imagen Docker
+  #
+  # Solo corre si:
+  #   - El Job 1 (tests) pasó ✓
+  #   - No es un Pull Request (solo en push real)
+  # Los contract tests (Job 2) NO bloquean este job.
+  # ══════════════════════════════════════════════════════════════
+  build-and-push:
+    name: Build & Push Docker Image
+    runs-on: ubuntu-latest
+    needs: tests
+    if: success() && github.event_name != 'pull_request'
+
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      - name: Login en Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and Push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            erickyamilrc/shipment-tracker-api:latest
+            erickyamilrc/shipment-tracker-api:${{ github.sha }}
+            ${{ startsWith(github.ref, 'refs/tags/v') && format('erickyamilrc/shipment-tracker-api:{0}', github.ref_name) || '' }}

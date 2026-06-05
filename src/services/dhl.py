@@ -36,3 +36,34 @@ class DHLService:
             )
 
         return data
+
+    @staticmethod
+    async def obtener_coordenadas(city: str) -> tuple[float, float]:
+        """
+        Obtiene la lista de ubicaciones del mock en Railway mapeando la estructura
+        bajo la llave 'locations' para extraer latitud y longitud.
+        """
+        url_locations_list = "https://shipment-tracker-mock-api-production.up.railway.app/locations"
+        ciudad_buscada = city.lower().strip()
+        
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            try:
+                response = await client.get(url_locations_list)
+                if response.status_code == 200:
+                    data = response.json()
+                    
+                    locations = data.get("locations", []) if isinstance(data, dict) else data
+                    
+                    for loc in locations:
+                        ciudad_mock = loc.get("city", "").lower().strip()
+                        
+                        if ciudad_buscada in ciudad_mock or ciudad_mock in ciudad_buscada:
+                            lat = loc.get("latitude")
+                            lon = loc.get("longitude")
+                            if lat is not None and lon is not None:
+                                return float(lat), float(lon)
+                                
+            except Exception:
+                pass
+                
+        return 0.0, 0.0
